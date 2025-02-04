@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "apx-shim",
+    "apx-ui"
+]
