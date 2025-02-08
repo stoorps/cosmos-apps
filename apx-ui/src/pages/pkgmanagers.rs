@@ -1,9 +1,6 @@
 use apx_shim::PackageManager;
 use cosmic::{
-    self,
-    iced_widget::{self, iced},
-    theme,
-    widget::{self, nav_bar},
+    self, cosmic_theme::{self, Spacing}, iced_widget::{self, iced}, theme, widget::{self, nav_bar}, Element, Theme
 };
 
 use crate::app::Message;
@@ -22,9 +19,6 @@ impl PkgManagerModel {
     }
 }
 
-// pub fn text_editor -> cosmic::Element<'_, Message>
-// {
-// }
 #[derive(Debug, Clone)]
 pub enum PkgManagerMessage {
     AutoRemoveEdited(String),
@@ -51,52 +45,69 @@ impl PageModel for PkgManagerModel {
         let data = self.nav_bar.active_data::<PackageManager>();
 
         if let Some(data) = data {
-            iced_widget::column![
-                widget::Text::new(&data.name).size(32),
-                widget::Text::new("Details").size(24),
-                widget::Container::new(iced_widget::column![
+            println!("is built-in: {}", data.built_in);
+
+            let mut editors: Vec<widget::TextInput<'_, Message>> = match data.built_in {
+                false => vec![
                     widget::TextInput::new("autoremove command", &data.cmd_auto_remove)
                         .label("Autoremove")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::AutoRemoveEdited(text).into()),
                     widget::TextInput::new("clean command", &data.cmd_clean)
                         .label("Clean")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::CleanEdited(text).into()),
                     widget::TextInput::new("install command", &data.cmd_install)
                         .label("Install")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::InstallEdited(text).into()),
                     widget::TextInput::new("list command", &data.cmd_list)
                         .label("List")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::ListEdited(text).into()),
                     widget::TextInput::new("purge command", &data.cmd_purge)
                         .label("Purge")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::PurgeEdited(text).into()),
                     widget::TextInput::new("remove command", &data.cmd_remove)
                         .label("Remove")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::RemoveEdited(text).into()),
                     widget::TextInput::new("search command", &data.cmd_search)
                         .label("Search")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::ShowEdited(text).into()),
                     widget::TextInput::new("show command", &data.cmd_show)
                         .label("Search")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::SearchEdited(text).into()),
                     widget::TextInput::new("update command", &data.cmd_update)
                         .label("Update")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::UpdateEdited(text).into()),
                     widget::TextInput::new("upgrade command", &data.cmd_upgrade)
                         .label("Upgrade")
-                        .editable()
                         .on_input(|text| PkgManagerMessage::UpgradeEdited(text).into()),
-                ])
-            ]
+                ],
+                true => vec![
+                    widget::TextInput::new("autoremove command", &data.cmd_auto_remove)
+                        .label("Autoremove"),
+                    widget::TextInput::new("clean command", &data.cmd_clean).label("Clean"),
+                    widget::TextInput::new("install command", &data.cmd_install).label("Install"),
+                    widget::TextInput::new("list command", &data.cmd_list).label("List"),
+                    widget::TextInput::new("purge command", &data.cmd_purge).label("Purge"),
+                    widget::TextInput::new("remove command", &data.cmd_remove).label("Remove"),
+                    widget::TextInput::new("search command", &data.cmd_search).label("Search"),
+                    widget::TextInput::new("show command", &data.cmd_show).label("Search"),
+                    widget::TextInput::new("update command", &data.cmd_update).label("Update"),
+                    widget::TextInput::new("upgrade command", &data.cmd_upgrade).label("Upgrade"),
+                ],
+            };
+
+            let mut column = widget::Column::new();
+            for editor in editors.into_iter() {
+                let element: Element<'_, Message> = editor.into(); // Type annotation is crucial
+                column = column.push(element); // Reassign the column
+            }
+
+            iced_widget::scrollable(
+            iced_widget::column![
+                widget::Text::new("Details").size(18),
+                widget::Container::new(widget::Text::new(&data.name).size(32)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                widget::Text::new("Commands").size(18),
+                widget::Container::new(column.spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default()))
+            ].spacing(Spacing::default().space_xs))
             .into()
         } else {
             widget::Column::new()

@@ -5,7 +5,9 @@ use crate::fl;
 use crate::pages::{pkgmanagers, stacks, subsystems, Page, PageModel};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::iced::alignment::Horizontal::Left;
 use cosmic::iced::alignment::{Horizontal, Vertical};
+use cosmic::iced::program::with_style;
 use cosmic::iced::{Alignment, Length, Subscription};
 use cosmic::widget::segmented_button::{
     Entity, HorizontalSegmentedButton, VerticalSegmentedButton,
@@ -79,18 +81,18 @@ impl Application for AppModel {
         let mut nav = nav_bar::Model::default();
 
         nav.insert()
-            .text(fl!("subsystems"))
+            //.text(fl!("subsystems"))
             .data::<Page>(Page::Subsystems)
             .icon(icon::from_name("utilities-terminal-symbolic"))
             .activate();
 
         nav.insert()
-            .text(fl!("pkgmanagers"))
+            // .text(fl!("pkgmanagers"))
             .data::<Page>(Page::PkgManagers)
             .icon(icon::from_name("applications-system-symbolic"));
 
         nav.insert()
-            .text(fl!("stacks"))
+            //  .text(fl!("stacks"))
             .data::<Page>(Page::Stacks)
             .icon(icon::from_name("network-server-symbolic"));
 
@@ -185,23 +187,29 @@ impl Application for AppModel {
 
         cosmic::iced_widget::row![
             cosmic::iced_widget::column![
+
                 HorizontalSegmentedButton::new(&self.nav)
                     .button_height(32)
                     .button_padding([8, 16, 8, 16])
                     .button_spacing(8)
-                    .minimum_button_width(120)
-                    .width(Length::Shrink)
+                    .minimum_button_width(32)
+                    .width(Length::Fill)
+                    .button_alignment(Alignment::Center)
                     .on_activate(|id| Message::Navigate(id))
                     .style(theme::SegmentedButton::Control),
-                VerticalSegmentedButton::new(page_model.current_items())
-                    .button_height(32)
-                    .button_padding([8, 16, 8, 16])
-                    .button_spacing(8)
-                    .minimum_button_width(120)
-                    .width(Length::Shrink)
-                    .on_activate(|id| Message::SubNavigate(id))
-                    .style(theme::SegmentedButton::Control),
-            ],
+                widget::Container::new(
+                    VerticalSegmentedButton::new(page_model.current_items())
+                        .button_height(32)
+                        .button_padding([8, 16, 8, 16])
+                        .button_spacing(8)
+                        .width(Length::Fill)
+                        .on_activate(|id| Message::SubNavigate(id))
+                        .style(theme::SegmentedButton::Control)
+                )
+                .style(|t| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
+                .height(Length::Fill)
+            ]
+            .width(Length::FillPortion(2)),
             cosmic::iced_widget::column![page_model
                 .view()
                 .apply(widget::container)
@@ -209,7 +217,10 @@ impl Application for AppModel {
                 .height(Length::Fill)
                 .align_x(Horizontal::Center)
                 .align_y(Vertical::Center)]
+            .width(Length::FillPortion(5))
         ]
+        .spacing(10)
+        .padding(10)
         .into()
     }
 

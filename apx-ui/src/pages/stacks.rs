@@ -2,6 +2,7 @@ use apx_shim::Stack;
 use cosmic::{
     self, iced_widget,
     widget::{self, nav_bar},
+    Element,
 };
 
 use crate::app::Message;
@@ -38,19 +39,37 @@ impl PageModel for StacksModel {
         let data = self.nav_bar.active_data::<Stack>();
 
         if let Some(data) = data {
+            let editors: Vec<cosmic::Element<'_, Message>> = match data.built_in {
+                false => vec![
+                    widget::TextInput::new("base:latest", &data.base)
+                        .label("Base")
+                        .on_input(|text| StackMessage::BaseEdited(text).into())
+                        .into(),
+                    widget::TextInput::new("pkg manager", &data.package_manager)
+                        .label("Package Manager")
+                        .on_input(|text| StackMessage::PackageManagerEdited(text).into())
+                        .into(),
+                ],
+                true => vec![
+                    widget::TextInput::new("base:latest", &data.base)
+                        .label("Base")
+                        .into(),
+                    widget::TextInput::new("pkg manager", &data.package_manager)
+                        .label("Package Manager")
+                        .into(),
+                ],
+            };
+
+            let mut column = widget::Column::new();
+            for editor in editors.into_iter() {
+                let element: Element<'_, Message> = editor.into(); // Type annotation is crucial
+                column = column.push(element); // Reassign the column
+            }
+
             iced_widget::column![
                 widget::Text::new(&data.name).size(32),
                 widget::Text::new("Details").size(24),
-                widget::Container::new(iced_widget::column![
-                    widget::TextInput::new("base:latest", &data.base)
-                        .label("Base")
-                        .editable()
-                        .on_input(|text| StackMessage::BaseEdited(text).into()),
-                    widget::TextInput::new("pkg manager", &data.package_manager)
-                        .label("Package Manager")
-                        .editable()
-                        .on_input(|text| StackMessage::PackageManagerEdited(text).into()),
-                ]),
+                widget::Container::new(column.spacing(20))
             ]
             .into()
         } else {
