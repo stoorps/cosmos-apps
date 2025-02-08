@@ -46,6 +46,9 @@ pub enum Message {
     LaunchUrl(String),
     Navigate(Entity),
     SubNavigate(Entity),
+    PkgManager(pkgmanagers::PkgManagerMessage),
+    Stack(stacks::StackMessage),
+    Subsystem(subsystems::SubsystemMessage),
 }
 
 /// Create a COSMIC application from the app model
@@ -287,6 +290,21 @@ impl Application for AppModel {
 
                 page_model.on_select(entity);
             }
+            Message::PkgManager(_) => self
+                .page_models
+                .get_mut(&Page::PkgManagers)
+                .unwrap()
+                .on_message(message),
+            Message::Stack(_) => self
+                .page_models
+                .get_mut(&Page::Stacks)
+                .unwrap()
+                .on_message(message),
+            Message::Subsystem(_) => self
+                .page_models
+                .get_mut(&Page::Subsystems)
+                .unwrap()
+                .on_message(message),
         }
         Task::none()
     }

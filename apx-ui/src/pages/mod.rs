@@ -20,4 +20,5 @@ pub trait PageModel {
     fn current_items(&self) -> &nav_bar::Model;
     fn update_items(&mut self);
     fn on_select(&mut self, item: Entity);
+    fn on_message(&mut self, message: Message);
 }

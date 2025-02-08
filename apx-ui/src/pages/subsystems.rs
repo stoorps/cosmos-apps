@@ -19,6 +19,10 @@ impl SubSystemsModel {
         }
     }
 }
+#[derive(Debug, Clone)]
+pub enum SubsystemMessage {
+    Placeholder,
+}
 
 impl PageModel for SubSystemsModel {
     fn view(&self) -> cosmic::Element<'_, Message> {
@@ -51,5 +55,14 @@ impl PageModel for SubSystemsModel {
             }
             Err(_) => nav_bar::Model::default(),
         };
+    }
+
+    fn on_message(&mut self, message: Message) {
+        match message {
+            Message::Subsystem(msg) => match msg {
+                SubsystemMessage::Placeholder => {}
+            },
+            _ => {}
+        }
     }
 }
