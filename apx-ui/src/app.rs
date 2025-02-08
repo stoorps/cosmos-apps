@@ -2,11 +2,15 @@
 
 use crate::config::Config;
 use crate::fl;
+use crate::pages::{pkgmanagers, stacks, subsystems, Page, PageModel};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::{Alignment, Length, Subscription};
-use cosmic::widget::{self, icon, menu, nav_bar};
+use cosmic::widget::segmented_button::{
+    Entity, HorizontalSegmentedButton, VerticalSegmentedButton,
+};
+use cosmic::widget::{self, icon, menu, nav_bar, segmented_button, segmented_control};
 use cosmic::{cosmic_theme, theme, Application, ApplicationExt, Apply, Element};
 use futures_util::SinkExt;
 use std::collections::HashMap;
@@ -27,6 +31,9 @@ pub struct AppModel {
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     // Configuration data that persists between application runs.
     config: Config,
+
+    current_page: Page,
+    page_models: HashMap<Page, Box<dyn PageModel>>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -37,6 +44,8 @@ pub enum Message {
     ToggleContextPage(ContextPage),
     UpdateConfig(Config),
     LaunchUrl(String),
+    Navigate(Entity),
+    SubNavigate(Entity),
 }
 
 /// Create a COSMIC application from the app model
@@ -67,26 +76,43 @@ impl Application for AppModel {
         let mut nav = nav_bar::Model::default();
 
         nav.insert()
-            .text(fl!("page-id", num = 1))
-            .data::<Page>(Page::Page1)
-            .icon(icon::from_name("applications-science-symbolic"))
+            .text(fl!("subsystems"))
+            .data::<Page>(Page::Subsystems)
+            .icon(icon::from_name("utilities-terminal-symbolic"))
             .activate();
 
         nav.insert()
-            .text(fl!("page-id", num = 2))
-            .data::<Page>(Page::Page2)
+            .text(fl!("pkgmanagers"))
+            .data::<Page>(Page::PkgManagers)
             .icon(icon::from_name("applications-system-symbolic"));
 
         nav.insert()
-            .text(fl!("page-id", num = 3))
-            .data::<Page>(Page::Page3)
-            .icon(icon::from_name("applications-games-symbolic"));
+            .text(fl!("stacks"))
+            .data::<Page>(Page::Stacks)
+            .icon(icon::from_name("network-server-symbolic"));
+
+        let mut page_models: HashMap<Page, Box<dyn PageModel>> = HashMap::new();
+        page_models.insert(
+            Page::Subsystems,
+            Box::new(subsystems::SubSystemsModel::new()),
+        );
+        page_models.insert(
+            Page::PkgManagers,
+            Box::new(pkgmanagers::PkgManagerModel::new()),
+        );
+        page_models.insert(Page::Stacks, Box::new(stacks::StacksModel::new()));
+
+        page_models
+            .iter_mut()
+            .for_each(|(_, model)| model.update_items());
 
         // Construct the app model with the runtime's core.
         let mut app = AppModel {
             core,
+            current_page: Page::Subsystems,
             context_page: ContextPage::default(),
             nav,
+            page_models,
             key_binds: HashMap::new(),
             // Optional configuration file for an application.
             config: cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
@@ -124,7 +150,7 @@ impl Application for AppModel {
 
     /// Enables the COSMIC application to create a nav bar with this model.
     fn nav_model(&self) -> Option<&nav_bar::Model> {
-        Some(&self.nav)
+        None //Some(&self.nav)
     }
 
     /// Display a context drawer if the context page is requested.
@@ -147,13 +173,41 @@ impl Application for AppModel {
     /// Application events will be processed through the view. Any messages emitted by
     /// events received by widgets will be passed to the update method.
     fn view(&self) -> Element<Self::Message> {
-        widget::text::title1(fl!("welcome"))
-            .apply(widget::container)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center)
-            .into()
+        let page = match self.nav.data::<Page>(self.nav.active()) {
+            Some(page) => page,
+            None => &Page::Subsystems, //TODO: handle this error better
+        };
+
+        let page_model = self.page_models.get(page).unwrap(); //TODO: Handle this error better
+
+        cosmic::iced_widget::row![
+            cosmic::iced_widget::column![
+                HorizontalSegmentedButton::new(&self.nav)
+                    .button_height(32)
+                    .button_padding([8, 16, 8, 16])
+                    .button_spacing(8)
+                    .minimum_button_width(120)
+                    .width(Length::Shrink)
+                    .on_activate(|id| Message::Navigate(id))
+                    .style(theme::SegmentedButton::Control),
+                VerticalSegmentedButton::new(page_model.current_items())
+                    .button_height(32)
+                    .button_padding([8, 16, 8, 16])
+                    .button_spacing(8)
+                    .minimum_button_width(120)
+                    .width(Length::Shrink)
+                    .on_activate(|id| Message::SubNavigate(id))
+                    .style(theme::SegmentedButton::Control),
+            ],
+            cosmic::iced_widget::column![page_model
+                .view()
+                .apply(widget::container)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center)]
+        ]
+        .into()
     }
 
     /// Register subscriptions for this application.
@@ -222,6 +276,17 @@ impl Application for AppModel {
                     eprintln!("failed to open {url:?}: {err}");
                 }
             },
+            Message::Navigate(entity) => self.nav.activate(entity),
+            Message::SubNavigate(entity) => {
+                let page = match self.nav.data::<Page>(self.nav.active()) {
+                    Some(page) => page,
+                    None => &Page::Subsystems, //TODO: handle this error better
+                };
+
+                let page_model = self.page_models.get_mut(page).unwrap(); //TODO: Handle this error better
+
+                page_model.on_select(entity);
+            }
         }
         Task::none()
     }
@@ -285,13 +350,6 @@ impl AppModel {
             Task::none()
         }
     }
-}
-
-/// The page to display in the application.
-pub enum Page {
-    Page1,
-    Page2,
-    Page3,
 }
 
 /// The context page to display in the context drawer.
