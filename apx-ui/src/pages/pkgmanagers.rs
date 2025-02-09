@@ -8,7 +8,7 @@ use cosmic::{
     widget::{self, button, nav_bar},
     Element,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::app::Message;
 
@@ -116,7 +116,7 @@ impl PageModel for PkgManagerModel {
                     iced_widget::row![
                         button::link("Reset").on_press(PkgManagerMessage::Reset.into()),
                         button::link("Save").on_press(PkgManagerMessage::Save.into()),
-                        button::link("Delete").on_press(PkgManagerMessage::Delete.into()),
+                        button::destructive("Delete").on_press(PkgManagerMessage::Delete.into()),
                     ]
                     .spacing(20)
                     .width(Length::Shrink)
@@ -170,7 +170,14 @@ impl PageModel for PkgManagerModel {
     }
 
     fn on_message(&mut self, message: Message) {
-        let data = self.nav_bar.active_data_mut::<PackageManager>().unwrap(); //TODO: handle unwrap
+
+        let data = match self.nav_bar.active_data_mut::<PackageManager>() {
+            Some(data) => data,
+            None => {
+                warn!("No active data found");
+                return;
+            },
+        };
 
         match message {
             Message::PkgManager(msg) => match msg {
@@ -196,12 +203,16 @@ impl PageModel for PkgManagerModel {
                     //   }
                 }
                 PkgManagerMessage::Reset => {
-                    let name = self
-                        .nav_bar
-                        .active_data_mut::<PackageManager>()
-                        .unwrap()
-                        .name
-                        .clone(); //TODO: handle unwrap
+
+                    let name = match self
+                    .nav_bar
+                    .active_data_mut::<PackageManager>() {
+                        Some(data) => data.name.clone(),
+                        None => {
+                            warn!("No active data found");
+                            return;
+                        },
+                    };
 
                     self.update_items();
                     let matched = self

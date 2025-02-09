@@ -20,7 +20,7 @@ use cosmic::{
 };
 use futures_util::SinkExt;
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, warn};
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const APP_ICON: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/icon.svg");
@@ -183,12 +183,17 @@ impl Application for AppModel {
     fn view(&self) -> Element<Self::Message> {
         let page = match self.nav.data::<Page>(self.nav.active()) {
             Some(page) => page,
-            None => &Page::Subsystems, //TODO: handle this error better
+            None => &Page::Subsystems,
         };
 
         //let spacing = cosmic_theme::Spacing::default();
 
-        let page_model = self.page_models.get(page).unwrap(); //TODO: Handle this error better
+        let page_model = match self.page_models.get(page) {
+            Some(model) => model,
+            None => {
+                panic!("Could not find page model");
+            }
+        };
 
         cosmic::iced_widget::row![
             widget::Container::new(cosmic::iced_widget::column![
@@ -210,13 +215,13 @@ impl Application for AppModel {
                     .on_activate(|id| Message::SubNavigate(id))
             ])
             .width(Length::Fixed(300.))
-            .style(|_| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
+            .style(|_| theme::Container::primary(&cosmic_theme::Theme::default()))
             .height(Length::Fill),
             widget::Container::new(
                 page_model
                     .view()
                     .apply(widget::container)
-                    .width(Length::Fixed(400.))
+                    .width(Length::Fill)
                     .height(Length::Fill)
                     .align_x(Horizontal::Center)
                     .align_y(Vertical::Center)
@@ -298,10 +303,15 @@ impl Application for AppModel {
             Message::SubNavigate(entity) => {
                 let page = match self.nav.data::<Page>(self.nav.active()) {
                     Some(page) => page,
-                    None => &Page::Subsystems, //TODO: handle this error better
+                    None => &Page::Subsystems,
                 };
 
-                let page_model = self.page_models.get_mut(page).unwrap(); //TODO: Handle this error better
+                let page_model = match self.page_models.get_mut(page) {
+                    Some(model) => model,
+                    None => {
+                        panic!("Could not find page model");
+                    }
+                };
 
                 page_model.on_select(entity);
             }

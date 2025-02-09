@@ -7,7 +7,7 @@ use cosmic::{
     widget::{self, button, nav_bar},
     Element,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use crate::app::Message;
 use super::PageModel;
 
@@ -126,7 +126,14 @@ impl PageModel for StacksModel {
     }
 
     fn on_message(&mut self, message: Message) {
-        let data = self.nav_bar.active_data_mut::<Stack>().unwrap(); //TODO: handle unwrap
+
+        let data = match self.nav_bar.active_data_mut::<Stack>() {
+            Some(data) => data,
+            None => {
+                warn!("No active data found");
+                return;
+            },
+        };
 
         match message {
             Message::Stack(msg) => match msg {
@@ -142,12 +149,16 @@ impl PageModel for StacksModel {
                     Err(e) => todo!("Handle error on saving: {e}"),
                 },
                 StackMessage::Reset => {
-                    let name = self
-                        .nav_bar
-                        .active_data_mut::<Stack>()
-                        .unwrap()
-                        .name
-                        .clone(); //TODO: handle unwrap
+
+                    let name = match self
+                    .nav_bar
+                    .active_data_mut::<Stack>() {
+                        Some(data) => data.name.clone(),
+                        None => {
+                            warn!("No active data found");
+                            return;
+                        },
+                    };
 
                     self.update_items();
                     let matched = self
