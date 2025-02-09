@@ -4,21 +4,23 @@ use crate::config::Config;
 use crate::fl;
 use crate::pages::{pkgmanagers, stacks, subsystems, Page, PageModel};
 use cosmic::{
-    app::{context_drawer, Core, Task}, 
+    app::{context_drawer, Core, Task},
     cosmic_config::{self, CosmicConfigEntry},
-    cosmic_theme, 
+    cosmic_theme,
     iced::{
-        alignment::{Horizontal, Vertical}, 
-        Alignment, Length, Subscription},
-    theme, 
-    widget::{self, menu, nav_bar, icon, segmented_button::{
-        Entity, HorizontalSegmentedButton, VerticalSegmentedButton,}},
-    Application,
-    ApplicationExt,
-    Apply,
-    Element };
+        alignment::{Horizontal, Vertical},
+        Alignment, Length, Subscription,
+    },
+    theme,
+    widget::{
+        self, icon, menu, nav_bar,
+        segmented_button::{Entity, HorizontalSegmentedButton, VerticalSegmentedButton},
+    },
+    Application, ApplicationExt, Apply, Element,
+};
 use futures_util::SinkExt;
 use std::collections::HashMap;
+use tracing::error;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const APP_ICON: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/icon.svg");
@@ -189,9 +191,7 @@ impl Application for AppModel {
         let page_model = self.page_models.get(page).unwrap(); //TODO: Handle this error better
 
         cosmic::iced_widget::row![
-            widget::Container::new(
-            cosmic::iced_widget::column![
-
+            widget::Container::new(cosmic::iced_widget::column![
                 HorizontalSegmentedButton::new(&self.nav)
                     .button_height(32)
                     .button_padding([8, 16, 8, 16])
@@ -201,31 +201,27 @@ impl Application for AppModel {
                     .button_alignment(Alignment::Center)
                     .on_activate(|id| Message::Navigate(id))
                     .style(theme::SegmentedButton::TabBar),
-              
-                    VerticalSegmentedButton::new(page_model.current_items())
-                        .style(theme::SegmentedButton::TabBar)
-                        .button_height(32)
-                        .button_padding([8, 16, 8, 16])
-                        .button_spacing(8)
-                        .width(Length::Fill)
-                        .on_activate(|id| Message::SubNavigate(id))
-             
-            ]
-           
-        ) 
-        .width(Length::Fixed(300.))
-        .style(|_| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
-        .height(Length::Fill),
-    
-        widget::Container::new(page_model
-            .view()
-            .apply(widget::container)
-            .width(Length::Fixed(400.))
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center))
-        .width(Length::Fill)
-        
+                VerticalSegmentedButton::new(page_model.current_items())
+                    .style(theme::SegmentedButton::TabBar)
+                    .button_height(32)
+                    .button_padding([8, 16, 8, 16])
+                    .button_spacing(8)
+                    .width(Length::Fill)
+                    .on_activate(|id| Message::SubNavigate(id))
+            ])
+            .width(Length::Fixed(300.))
+            .style(|_| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
+            .height(Length::Fill),
+            widget::Container::new(
+                page_model
+                    .view()
+                    .apply(widget::container)
+                    .width(Length::Fixed(400.))
+                    .height(Length::Fill)
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Center)
+            )
+            .width(Length::Fill)
         ]
         .spacing(10)
         .padding(10)
@@ -295,7 +291,7 @@ impl Application for AppModel {
             Message::LaunchUrl(url) => match open::that_detached(&url) {
                 Ok(()) => {}
                 Err(err) => {
-                    eprintln!("failed to open {url:?}: {err}");
+                    error!("failed to open {url:?}: {err}");
                 }
             },
             Message::Navigate(entity) => self.nav.activate(entity),
