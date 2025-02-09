@@ -183,9 +183,12 @@ impl Application for AppModel {
             None => &Page::Subsystems, //TODO: handle this error better
         };
 
+        let spacing = cosmic_theme::Spacing::default();
+
         let page_model = self.page_models.get(page).unwrap(); //TODO: Handle this error better
 
         cosmic::iced_widget::row![
+            widget::Container::new(
             cosmic::iced_widget::column![
 
                 HorizontalSegmentedButton::new(&self.nav)
@@ -196,28 +199,32 @@ impl Application for AppModel {
                     .width(Length::Fill)
                     .button_alignment(Alignment::Center)
                     .on_activate(|id| Message::Navigate(id))
-                    .style(theme::SegmentedButton::Control),
-                widget::Container::new(
+                    .style(theme::SegmentedButton::TabBar),
+              
                     VerticalSegmentedButton::new(page_model.current_items())
+                        .style(theme::SegmentedButton::TabBar)
                         .button_height(32)
                         .button_padding([8, 16, 8, 16])
                         .button_spacing(8)
                         .width(Length::Fill)
                         .on_activate(|id| Message::SubNavigate(id))
-                        .style(theme::SegmentedButton::Control)
-                )
-                .style(|t| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
-                .height(Length::Fill)
+             
             ]
-            .width(Length::FillPortion(2)),
-            cosmic::iced_widget::column![page_model
-                .view()
-                .apply(widget::container)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(Horizontal::Center)
-                .align_y(Vertical::Center)]
-            .width(Length::FillPortion(5))
+           
+        ) 
+        .width(Length::Fixed(300.))
+        .style(|t| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
+        .height(Length::Fill),
+    
+        widget::Container::new(page_model
+            .view()
+            .apply(widget::container)
+            .width(Length::Fixed(400.))
+            .height(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center))
+        .width(Length::Fill)
+        
         ]
         .spacing(10)
         .padding(10)

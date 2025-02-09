@@ -356,9 +356,7 @@ impl PackageManager
 
     pub fn update(&self) -> Result<()>
     {
-        let mut command = format!("pkgmanagers update --name {}--need-sudo {} 
-        --autoremove {} --clean {} --install {} --list '{}' --purge {} --remove {}
-       --search '{} --show {} --update {} --upgrade {}",
+        let mut command = format!("pkgmanagers update --name '{}' --need-sudo '{}' --autoremove '{}' --clean '{}' --install '{}' --list '{}' --purge '{}' --remove '{}' --search '{}' --show '{}' --update '{}' --upgrade '{}'",
         self.name,
         self.need_sudo,
         self.cmd_auto_remove,
@@ -373,6 +371,8 @@ impl PackageManager
         self.cmd_upgrade
     );
 
+        println!("command: {}", command);
+
         let res = run_apx(&command, false);
 
         match res{
@@ -383,7 +383,9 @@ impl PackageManager
 
     pub fn remove(&self, force: bool) -> Result<()>
     {
-        let mut command = format!("pkgmanagers rm --name {}", self.name);
+        let mut command = format!("pkgmanagers rm --name '{}'", self.name);
+
+        println!("command: {command}");
 
         if force
         {
@@ -392,6 +394,8 @@ impl PackageManager
 
         let res = run_apx(&command,
         false);
+
+        println!("got HERE");
 
         match res{
             Ok(_) => Ok(()),

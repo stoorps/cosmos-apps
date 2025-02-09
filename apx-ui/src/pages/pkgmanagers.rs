@@ -1,6 +1,6 @@
 use apx_shim::PackageManager;
 use cosmic::{
-    self, cosmic_theme::{self, Spacing}, iced_widget::{self, iced}, theme, widget::{self, nav_bar}, Element, Theme
+    self, cosmic_theme::{self, Spacing}, iced::{Alignment, Length, Padding}, iced_wgpu::graphics::text::cosmic_text::Align, iced_widget::{self, iced}, theme, widget::{self, button, nav_bar }, Element 
 };
 
 use crate::app::Message;
@@ -31,6 +31,9 @@ pub enum PkgManagerMessage {
     ShowEdited(String),
     UpdateEdited(String),
     UpgradeEdited(String),
+    Save,
+    Reset,
+    Delete,
 }
 
 impl Into<Message> for PkgManagerMessage {
@@ -100,16 +103,31 @@ impl PageModel for PkgManagerModel {
                 let element: Element<'_, Message> = editor.into(); // Type annotation is crucial
                 column = column.push(element); // Reassign the column
             }
+                
+            iced_widget::column![
+                iced_widget::row![
+                    widget::Text::new(&data.name).size(24).width(Length::Fill),
+                    
+                    iced_widget::row![
+                        button::link("Reset").on_press( PkgManagerMessage::Reset.into()),
+                        button::link("Save").on_press(PkgManagerMessage::Save.into()),
+                        button::link("Delete").on_press(PkgManagerMessage::Delete.into()),
+                    ]
+                    .spacing(20)
+                    .width(Length::Shrink).align_y(Alignment::Center)
+                ].padding([0,0, 20, 0]).height(Length::Shrink),
 
             iced_widget::scrollable(
-            iced_widget::column![
-                widget::Text::new("Details").size(18),
-                widget::Container::new(widget::Text::new(&data.name).size(32)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
-                widget::Text::new("Commands").size(18),
-                widget::Container::new(column.spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default()))
-            ].spacing(Spacing::default().space_xs))
+                iced_widget::column![
+                    widget::Text::new("Commands").size(18),
+                    widget::Container::new(column.spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                ].spacing(Spacing::default().space_xs)
+            ).height(Length::Fill),
+            ]
             .into()
         } else {
+
+                
             widget::Column::new()
                 .push(widget::Text::new("No package manager selected").size(24))
                 .into()
@@ -159,6 +177,42 @@ impl PageModel for PkgManagerModel {
                 PkgManagerMessage::ShowEdited(s) => data.cmd_show = s,
                 PkgManagerMessage::UpdateEdited(s) => data.cmd_update = s,
                 PkgManagerMessage::UpgradeEdited(s) => data.cmd_upgrade = s,
+                PkgManagerMessage::Save => {
+                   // match data.create()
+                   // {
+                  //      Ok(_) => return,
+                        //Err(_) => 
+                        match data.update() {
+                            Ok(_) => return,
+                            Err(e) => todo!("Handle error on saving: {e}"),
+                        }
+                 //   }
+                },
+                PkgManagerMessage::Reset =>{
+                    let name = self.nav_bar.active_data_mut::<PackageManager>().unwrap().name.clone(); //TODO: handle unwrap
+
+                    self.update_items();
+                    let matched = self.nav_bar.iter().find(|e| self.nav_bar.data::<PackageManager>(*e).unwrap().name == name);
+                     
+                     match matched
+                     {
+                        Some(m) => self.nav_bar.activate(m),
+                        None => todo!("Handle no match on reset"),
+                    }
+                
+                },
+                PkgManagerMessage::Delete =>{
+                    match data.remove(true) {
+                        Ok(_) => {  
+                        
+                        println!("Successfully deleted");    
+                        
+                        self.nav_bar.remove(self.nav_bar.active());
+                       
+                    },
+                        Err(_) => todo!(),
+                    }
+                },
             },
 
             _ => (),
