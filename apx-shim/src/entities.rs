@@ -34,7 +34,7 @@ impl Stack
 
     pub fn create(&mut self) -> Result<()>
     { 
-        let res = run_apx(
+        run_apx(
             &format!("stacks new --name {} --base {} --packages {} --pkg-manager {}",
                             self.name,
                             self.base, 
@@ -307,13 +307,14 @@ impl PackageManager
  
     pub fn create(&mut self) -> Result<()>
     { 
-        let mut command = format!("pkgmanagers new --name {}--need-sudo {} 
-        --autoremove {} --clean {} --install {} --list '{}' --purge {} --remove {}
-       --search '{} --show {} --update {} --upgrade {}",
+        let command = format!(
+            "pkgmanagers new --name '{}' --need-sudo '{}' 
+             --autoremove '{}' --clean '{}' --install '{}' --list '{}' --purge '{}' --remove '{}'
+             --search '{}' --show '{}' --update '{}' --upgrade '{}'",
         self.name,
         self.need_sudo,
         self.cmd_auto_remove,
-        self.cmd_clean,
+        self.cmd_clean, 
         self.cmd_install,
         self.cmd_list,
         self.cmd_purge,
@@ -356,7 +357,7 @@ impl PackageManager
 
     pub fn update(&self) -> Result<()>
     {
-        let mut command = format!("pkgmanagers update --name '{}' --need-sudo '{}' --autoremove '{}' --clean '{}' --install '{}' --list '{}' --purge '{}' --remove '{}' --search '{}' --show '{}' --update '{}' --upgrade '{}'",
+        let command = format!("pkgmanagers update --name '{}' --need-sudo '{}' --autoremove '{}' --clean '{}' --install '{}' --list '{}' --purge '{}' --remove '{}' --search '{}' --show '{}' --update '{}' --upgrade '{}'",
         self.name,
         self.need_sudo,
         self.cmd_auto_remove,

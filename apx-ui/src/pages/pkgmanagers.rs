@@ -1,6 +1,6 @@
 use apx_shim::PackageManager;
 use cosmic::{
-    self, cosmic_theme::{self, Spacing}, iced::{Alignment, Length, Padding}, iced_wgpu::graphics::text::cosmic_text::Align, iced_widget::{self, iced}, theme, widget::{self, button, nav_bar }, Element 
+    self, cosmic_theme::{self, Spacing}, iced::{Alignment, Length}, iced_widget::{self}, theme, widget::{self, button, nav_bar }, Element 
 };
 
 use crate::app::Message;
@@ -44,13 +44,12 @@ impl Into<Message> for PkgManagerMessage {
 
 impl PageModel for PkgManagerModel {
     fn view(&self) -> cosmic::Element<'_, Message> {
-        let selected = self.nav_bar.active();
         let data = self.nav_bar.active_data::<PackageManager>();
 
         if let Some(data) = data {
             println!("is built-in: {}", data.built_in);
 
-            let mut editors: Vec<widget::TextInput<'_, Message>> = match data.built_in {
+            let editors: Vec<widget::TextInput<'_, Message>> = match data.built_in {
                 false => vec![
                     widget::TextInput::new("autoremove command", &data.cmd_auto_remove)
                         .label("Autoremove")
@@ -120,7 +119,7 @@ impl PageModel for PkgManagerModel {
             iced_widget::scrollable(
                 iced_widget::column![
                     widget::Text::new("Commands").size(18),
-                    widget::Container::new(column.spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                    widget::Container::new(column.spacing(20).padding(20)).style(|_| theme::Container::primary(&cosmic_theme::Theme::default())),
                 ].spacing(Spacing::default().space_xs)
             ).height(Length::Fill),
             ]
@@ -162,7 +161,6 @@ impl PageModel for PkgManagerModel {
     }
 
     fn on_message(&mut self, message: Message) {
-        let selected = self.nav_bar.active();
         let data = self.nav_bar.active_data_mut::<PackageManager>().unwrap(); //TODO: handle unwrap
 
         match message {

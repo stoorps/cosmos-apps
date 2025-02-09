@@ -3,17 +3,20 @@
 use crate::config::Config;
 use crate::fl;
 use crate::pages::{pkgmanagers, stacks, subsystems, Page, PageModel};
-use cosmic::app::{context_drawer, Core, Task};
-use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::alignment::Horizontal::Left;
-use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::program::with_style;
-use cosmic::iced::{Alignment, Length, Subscription};
-use cosmic::widget::segmented_button::{
-    Entity, HorizontalSegmentedButton, VerticalSegmentedButton,
-};
-use cosmic::widget::{self, icon, menu, nav_bar, segmented_button, segmented_control};
-use cosmic::{cosmic_theme, theme, Application, ApplicationExt, Apply, Element};
+use cosmic::{
+    app::{context_drawer, Core, Task}, 
+    cosmic_config::{self, CosmicConfigEntry},
+    cosmic_theme, 
+    iced::{
+        alignment::{Horizontal, Vertical}, 
+        Alignment, Length, Subscription},
+    theme, 
+    widget::{self, menu, nav_bar, icon, segmented_button::{
+        Entity, HorizontalSegmentedButton, VerticalSegmentedButton,}},
+    Application,
+    ApplicationExt,
+    Apply,
+    Element };
 use futures_util::SinkExt;
 use std::collections::HashMap;
 
@@ -34,7 +37,6 @@ pub struct AppModel {
     // Configuration data that persists between application runs.
     config: Config,
 
-    current_page: Page,
     page_models: HashMap<Page, Box<dyn PageModel>>,
 }
 
@@ -114,7 +116,6 @@ impl Application for AppModel {
         // Construct the app model with the runtime's core.
         let mut app = AppModel {
             core,
-            current_page: Page::Subsystems,
             context_page: ContextPage::default(),
             nav,
             page_models,
@@ -123,10 +124,10 @@ impl Application for AppModel {
             config: cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
                 .map(|context| match Config::get_entry(&context) {
                     Ok(config) => config,
-                    Err((_errors, config)) => {
-                        // for why in errors {
-                        //     tracing::error!(%why, "error loading app config");
-                        // }
+                    Err((errors, config)) => {
+                        for why in errors {
+                            tracing::error!(%why, "error loading app config");
+                        }
 
                         config
                     }
@@ -183,7 +184,7 @@ impl Application for AppModel {
             None => &Page::Subsystems, //TODO: handle this error better
         };
 
-        let spacing = cosmic_theme::Spacing::default();
+        //let spacing = cosmic_theme::Spacing::default();
 
         let page_model = self.page_models.get(page).unwrap(); //TODO: Handle this error better
 
@@ -213,7 +214,7 @@ impl Application for AppModel {
            
         ) 
         .width(Length::Fixed(300.))
-        .style(|t| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
+        .style(|_| theme::Container::primary(&cosmic_theme::Theme::default())) //TODO: Understand this... Doesn't seem to follow other widgets
         .height(Length::Fill),
     
         widget::Container::new(page_model
@@ -253,9 +254,9 @@ impl Application for AppModel {
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
                 .map(|update| {
-                    // for why in update.errors {
-                    //     tracing::error!(?why, "app config error");
-                    // }
+                    for why in update.errors {
+                        tracing::error!(?why, "app config error");
+                    }
 
                     Message::UpdateConfig(update.config)
                 }),

@@ -36,7 +36,6 @@ impl Into<Message> for StackMessage {
 
 impl PageModel for StacksModel {
     fn view(&self) -> cosmic::Element<'_, Message> {
-        let selected = self.nav_bar.active();
         let data = self.nav_bar.active_data::<Stack>();
 
         if let Some(data) = data {
@@ -84,7 +83,7 @@ impl PageModel for StacksModel {
             iced_widget::scrollable(
                 iced_widget::column![
                     widget::Text::new("Commands").size(18),
-                    widget::Container::new(column.spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                    widget::Container::new(column.spacing(20).padding(20)).style(|_| theme::Container::primary(&cosmic_theme::Theme::default())),
                 ].spacing(Spacing::default().space_xs)
             ).height(Length::Fill),
             ]

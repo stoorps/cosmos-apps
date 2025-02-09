@@ -1,6 +1,6 @@
 use apx_shim::Subsystem;
 use cosmic::{
-    self, cosmic_theme::{self, Spacing}, iced::Length, iced_widget, theme, widget::{self, nav_bar, segmented_button::{self, Entity, SingleSelect, VerticalSegmentedButton}}, Element
+    self, cosmic_theme::{self, Spacing}, iced::Length, iced_widget, theme, widget::{self, nav_bar, segmented_button::{self, Entity, SingleSelect, VerticalSegmentedButton}}
 };
 
 use crate::app::Message;
@@ -38,7 +38,6 @@ impl SubSystemsModel {
 }
 #[derive(Debug, Clone)]
 pub enum SubsystemMessage {
-    Placeholder,
     Reset,
     Start,
     Stop,
@@ -69,16 +68,9 @@ fn labelled_info(label: impl Into<String>, info: impl Into<String>) -> cosmic::E
 
 impl PageModel for SubSystemsModel {
     fn view(&self) -> cosmic::Element<'_, Message> {
-        let selected = self.nav_bar.active();
         let data = self.nav_bar.active_data::<Subsystem>();
 
         if let Some(data) = data {
-        
-
-          
-
-
-
             iced_widget::column![
                     widget::Text::new(&data.name).size(24).width(Length::Fill),
 
@@ -91,7 +83,7 @@ impl PageModel for SubSystemsModel {
                         labelled_info("Package Manager", &data.stack.package_manager),
                         //TODO: Exported programs
 
-                    ].spacing(20).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())).width(Length::Fill),
+                    ].spacing(20).padding(20)).style(|_| theme::Container::primary(&cosmic_theme::Theme::default())).width(Length::Fill),
 
                     widget::Text::new("Subsystem actions").size(18),
                     widget::Container::new(
@@ -101,7 +93,7 @@ impl PageModel for SubSystemsModel {
                         .button_spacing(8)
                         .width(Length::Fill)
                         .on_activate(|id| SubsystemMessage::HandleSubButton(id).into()) //TODO: handle unwrap
-                        .style(theme::SegmentedButton::TabBar).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                        .style(theme::SegmentedButton::TabBar).padding(20)).style(|_| theme::Container::primary(&cosmic_theme::Theme::default())),
 
                     widget::Text::new("Destructive Actions").size(18),
                     widget::Container::new(
@@ -111,7 +103,7 @@ impl PageModel for SubSystemsModel {
                         .button_spacing(8)
                         .width(Length::Fill)
                         .on_activate(|id| SubsystemMessage::HandleDestButton(id).into()) //TODO: handle unwrap
-                        .style(theme::SegmentedButton::TabBar).padding(20)).style(|t| theme::Container::primary(&cosmic_theme::Theme::default())),
+                        .style(theme::SegmentedButton::TabBar).padding(20)).style(|_| theme::Container::primary(&cosmic_theme::Theme::default())),
                 ].spacing(Spacing::default().space_xs).padding([20,0, 0, 0])
             ).height(Length::Fill),
             ]
@@ -156,18 +148,16 @@ impl PageModel for SubSystemsModel {
 
         match message {
             Message::Subsystem(msg) => match msg {
-                SubsystemMessage::Placeholder => {}
-               
                     SubsystemMessage::HandleDestButton(e) => 
                     {
                         
                         match self.destructive_actions.data::<SubsystemMessage>(e).unwrap()
                         {
                             SubsystemMessage::Reset => { 
-                                data.reset(true); //TODO: Handle status updates
+                                let _ = data.reset(true); //TODO: Handle status updates
                                 },    
                                 SubsystemMessage::Delete => {
-                                    data.remove(true);
+                                    let _ = data.remove(true);
                                }
                          
                             _ =>(),
@@ -178,37 +168,37 @@ impl PageModel for SubSystemsModel {
                         match self.sub_actions.data::<SubsystemMessage>(e).unwrap()
                         {
                             SubsystemMessage::Start => { 
-                                data.start(); //TODO: Handle status updates
+                                let _ = data.start(); //TODO: Handle status updates
                             },
                             SubsystemMessage::Stop => { 
-                                data.start(); //TODO: Handle status updates
+                                let _ = data.start(); //TODO: Handle status updates
                             },
                             SubsystemMessage::Autoremove => {
-                                data.autoremove();  //TODO: Handle status updates
+                                let _ = data.autoremove();  //TODO: Handle status updates
                             }
                             SubsystemMessage::CleanPackageManagerCache => {
-                                data.clean();  //TODO: Handle status updates
+                                let _ = data.clean();  //TODO: Handle status updates
                             },
                             _ =>(),
                         }
                     }
                     SubsystemMessage::Reset => { 
-                        data.reset(true); //TODO: Handle status updates
+                        let _ = data.reset(true); //TODO: Handle status updates
                         },    
                     SubsystemMessage::Start => { 
-                        data.start(); //TODO: Handle status updates
+                        let _ = data.start(); //TODO: Handle status updates
                     },
                     SubsystemMessage::Stop => { 
-                        data.start(); //TODO: Handle status updates
+                        let _ = data.start(); //TODO: Handle status updates
                     },
                     SubsystemMessage::Autoremove => {
-                        data.autoremove();  //TODO: Handle status updates
+                        let _ = data.autoremove();  //TODO: Handle status updates
                     }
                     SubsystemMessage::CleanPackageManagerCache => {
-                        data.clean();  //TODO: Handle status updates
+                        let _ = data.clean();  //TODO: Handle status updates
                     }
                     SubsystemMessage::Delete => {
-                        data.remove(true);
+                        let _ = data.remove(true);
 
                     }
              
