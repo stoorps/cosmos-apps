@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-udisks = "0.1.0"
-zbus = "5.5.0"
+udisks = { workspace = true }
+zbus = { workspace = true }
