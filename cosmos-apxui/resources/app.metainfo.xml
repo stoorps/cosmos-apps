@@ -6,14 +6,14 @@
   <name>Apx Ui</name>
   <summary>GUI for Apx</summary>
   <icon type="remote" width="64" height="64" scale="1">
-    https://github.com/stoorps/apx-cosmic/raw/main/resources/icons/hicolor/scalable/apps/icon.svg
+    https://github.com/stoorps/cosmic-apps/raw/main/resources/icons/hicolor/scalable/apps/icon.svg
   </icon>
-  <url type="vcs-browser">https://github.com/stoorps/apx-cosmic</url>
-  <launchable type="desktop-id">com.singularityos.apx.desktop</launchable>
+  <url type="vcs-browser">https://github.com/stoorps/cosmic-apps</url>
+  <launchable type="desktop-id">com.cosmic.apxui.desktop</launchable>
   <provides>
-    <id>com.singularityos.apx</id>
+    <id>com.cosmos.apxui</id>
     <binaries>
-      <binary>apx-ui</binary>
+      <binary>cosmos-apxui</binary>
     </binaries>
   </provides>
   <requires>
@@ -32,4 +32,3 @@
   </keywords>
   <content_rating type="oars-1.1" />
 </component>
-

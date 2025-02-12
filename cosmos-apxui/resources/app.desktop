@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Apx Ui
+Comment=GUI for Apx
+Type=Application
+Icon=com.cosmos.apxui
+Exec=cosmos-apxui %F
+Terminal=false
+StartupNotify=true
+Categories=COSMIC
+Keywords=COSMIC
+MimeType=

@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Apx Ui
-Comment=GUI for Apx
+Name=Cosmos Disks
+Comment=An application for the COSMIC™ desktop
 Type=Application
-Icon=com.singularityos.apx
-Exec=apx-ui %F
+Icon=com.cosmos.Disks
+Exec=cosmos-disks %F
 Terminal=false
 StartupNotify=true
 Categories=COSMIC

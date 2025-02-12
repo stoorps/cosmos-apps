@@ -1,10 +1,10 @@
 [package]
-name = "apx-ui"
+name = "cosmos-apxui"
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "GUI for Apx"
-repository = "https://github.com/stoorps/apx-cosmic"
+repository = "https://github.com/stoorps/cosmos-apps"
 
 [build-dependencies]
 vergen = { version = "8", features = ["git", "gitcl"] }
