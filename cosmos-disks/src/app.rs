@@ -46,6 +46,9 @@ pub enum Message {
     UpdateConfig(Config),
     LaunchUrl(String),
     VolumesMessage(VolumesControlMessage),
+    DriveChanged(DriveModel),
+    DriveRemoved(DriveModel),
+    DriveAdded(DriveModel),
 }
 
 /// Create a COSMIC application from the app model
@@ -349,6 +352,7 @@ impl Application for AppModel {
                 std::any::TypeId::of::<MySubscription>(),
                 cosmic::iced::stream::channel(4, move |mut channel| async move {
                     _ = channel.send(Message::SubscriptionChannel).await;
+                    println!("Sent channel message");
 
                     futures_util::future::pending().await
                 }),
@@ -363,6 +367,7 @@ impl Application for AppModel {
 
                     Message::UpdateConfig(update.config)
                 }),
+            
         ])
     }
 
@@ -405,6 +410,9 @@ impl Application for AppModel {
                 let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
                 volumes_control.update(volumes_control_message);
             }
+            Message::DriveChanged(drive_model) => todo!(),
+            Message::DriveRemoved(drive_model) => todo!(),
+            Message::DriveAdded(drive_model) => todo!(),
         }
         Task::none()
     }

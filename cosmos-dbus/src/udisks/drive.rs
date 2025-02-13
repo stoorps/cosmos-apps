@@ -6,9 +6,10 @@ use tracing::{info, warn};
 use tracing_subscriber::fmt::format;
 use udisks2::drive;
 use zbus::{
-    zvariant::{self, OwnedObjectPath},
-    Connection, Proxy,
+    
+    proxy::{self, SignalStream}, zvariant::{self, OwnedObjectPath}, Connection, Proxy
 };
+use zbus_macros::proxy;
 
 use super::PartitionModel;
 
@@ -65,6 +66,7 @@ pub struct DriveModel {
     pub name: String,
     pub block_path: String,
     pub partitions: Vec<PartitionModel>,
+    pub path: String,
 }
 
 async fn get_drive_proxy<'a>(path: &str) -> Result<drive::DriveProxy<'a>> {
@@ -121,18 +123,11 @@ impl DriveModel {
                 }
             };
 
-            //TODO: Get all drive info.
             let mut drive = DriveModel {
                 name: drive_proxy.inner().path().to_string(),
-                // block_path: drive.inner().path().to_string(),
+                path: path.as_str().to_owned(),
                 size: drive_proxy.size().await?,
-
-                // device: drive.dec().await?,
                 id: drive_proxy.id().await?,
-                // media: match drive.cached_media()? {
-                //     Some(media) => media,
-                //     None => String::from("Unknown"),
-                // },
                 model: drive_proxy.model().await?,
                 serial: drive_proxy.serial().await?,
                 vendor: drive_proxy.vendor().await?,
@@ -238,4 +233,42 @@ impl DriveModel {
 
         Ok(drives.into_values().collect())
     }
+
 }
+
+// #[proxy(
+//     default_service = "org.freedesktop.UDisks2",
+//     default_path = "/org/freedesktop/UDisks2/Manager",
+//     interface = "org.freedesktop.UDisks2.Manager"
+// )]
+// trait UDisks2Manager {
+//     #[zbus(signal)]
+//     fn device_added(&self, device: OwnedObjectPath) -> zbus::Result<()>;
+
+//     #[zbus(signal)]
+//     fn device_removed(&self, device: OwnedObjectPath) -> zbus::Result<()>;
+// }
+
+// #[tokio::main]
+// async fn main() -> Result<(), Box<dyn Error>> {
+//     let connection = Connection::system().await?;
+//     let udisks_proxy = UDisks2ManagerProxy::new(&connection).await?;
+
+//     let mut device_added_stream = udisks_proxy.receive_device_added().await?;
+//     let mut device_removed_stream = udisks_proxy.receive_device_removed().await?;
+
+//     println!("Monitoring UDisks2 for device changes...");
+
+//     loop {  // Use loop for concurrent stream handling
+//         tokio::select! {
+//             Some(msg) = device_added_stream.next() => {
+//                 let args: DeviceAddedArgs = msg.args()?;
+//                 println!("Device Added: {}", args.device);
+//             }
+//             Some(msg) = device_removed_stream.next() => {
+//                 let args: DeviceRemovedArgs = msg.args()?;
+//                 println!("Device Removed: {}", args.device);
+//             }
+//         }
+//     }
+// }
