@@ -1,17 +1,13 @@
 use std::collections::HashMap;
-use std::ops::Index;
-use std::sync::Arc;
 use std::time::Duration;
-
 use anyhow::Result;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
-use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::error;
 use zbus::{
-    zvariant::{self, OwnedObjectPath, Value},
+    zvariant::{self, Value},
     Connection,
 };
 use zbus_macros::proxy;
@@ -31,7 +27,6 @@ pub trait UDisks2Manager {
 }
 
 pub struct DiskManager {
-    connection: Connection,
     proxy: UDisks2ManagerProxy<'static>,
 }
 
@@ -50,14 +45,12 @@ impl DiskManager {
         let connection = Connection::system().await?;
         let proxy = UDisks2ManagerProxy::new(&connection).await?;
         Ok(Self {
-            connection,
             proxy,
         })
     }
 
     pub fn device_event_stream(&self, interval: Duration) -> DeviceEventStream {
         let (sender, receiver) = mpsc::channel(32); // Channel capacity of 32
-        let connection = self.connection.clone();
         let proxy = self.proxy.clone();
 
         tokio::spawn(async move {

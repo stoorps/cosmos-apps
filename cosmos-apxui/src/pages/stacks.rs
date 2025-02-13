@@ -26,7 +26,7 @@ impl StacksModel {
 pub enum StackMessage {
     BaseEdited(String),
     PackageManagerEdited(String),
-    PackagesEdited,
+    //PackagesEdited,
     Reset,
     Save,
     Delete,
@@ -143,7 +143,7 @@ impl PageModel for StacksModel {
                 StackMessage::PackageManagerEdited(text) => {
                     data.package_manager = text;
                 }
-                StackMessage::PackagesEdited => {}
+                //StackMessage::PackagesEdited => {}
                 StackMessage::Save => match data.update() {
                     Ok(_) => return,
                     Err(e) => todo!("Handle error on saving: {e}"),

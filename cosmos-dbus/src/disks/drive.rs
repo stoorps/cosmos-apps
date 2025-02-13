@@ -47,7 +47,7 @@ trait UDisks2Block {
     default_service = "org.freedesktop.UDisks2",
     interface = "org.freedesktop.UDisks2.Drive"
 )]
-trait UDisks2Drive {
+pub(crate) trait UDisks2Drive {
     #[zbus(property)]
     fn size(&self) -> zbus::Result<u64>;
     #[zbus(property)]

@@ -2,18 +2,13 @@
 
 use crate::config::Config;
 use crate::fl;
-use crate::utils::{VolumesControl, VolumesControlMessage, VolumesModel};
+use crate::utils::{VolumesControl, VolumesControlMessage};
 use cosmic::app::{context_drawer, Core, Task};
-use cosmic::cctk::sctk::reexports::calloop::channel;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::alignment::Horizontal::Left;
 use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::{Alignment, Executor, Length, Subscription};
-use cosmic::iced_core::Layout;
-use cosmic::iced_widget::{Column, Row};
-use cosmic::widget::menu::menu_button;
+use cosmic::iced::{Alignment, Length, Subscription};
 use cosmic::widget::text::heading;
-use cosmic::widget::{self, container, flex_row, horizontal_space, icon, menu, nav_bar, Space};
+use cosmic::widget::{self, icon, menu, nav_bar, Space};
 use cosmic::{cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element};
 use cosmos_common::{bytes_to_pretty, labelled_info};
 use cosmos_dbus::disks::{DiskManager, DriveModel};
@@ -43,7 +38,6 @@ pub struct AppModel {
 #[derive(Debug, Clone)]
 pub enum Message {
     OpenRepositoryUrl,
-    SubscriptionChannel,
     ToggleContextPage(ContextPage),
     UpdateConfig(Config),
     LaunchUrl(String),
@@ -401,10 +395,6 @@ impl Application for AppModel {
                 _ = open::that_detached(REPOSITORY);
             }
 
-            Message::SubscriptionChannel => {
-                // For example purposes only.
-            }
-
             Message::ToggleContextPage(context_page) => {
                 if self.context_page == context_page {
                     // Close the context drawer if the toggled context page is the same.
@@ -430,7 +420,7 @@ impl Application for AppModel {
                 let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
                 volumes_control.update(volumes_control_message);
             }
-            Message::DriveRemoved(drive_model) => {
+            Message::DriveRemoved(_drive_model) => {
     
                    //TODO: use DeviceManager.apply_change()
                    let selected = match self.nav.active_data::<DriveModel>()
@@ -489,7 +479,7 @@ impl Application for AppModel {
                    self.nav = nav;
 
             },
-            Message::DriveAdded(drive_model) => 
+            Message::DriveAdded(_drive_model) => 
             {
                    //TODO: use DeviceManager.apply_change()
                    let selected = match self.nav.active_data::<DriveModel>()
@@ -611,13 +601,6 @@ impl AppModel {
             Task::none()
         }
     }
-}
-
-/// The page to display in the application.
-pub enum Page {
-    Page1,
-    Page2,
-    Page3,
 }
 
 /// The context page to display in the context drawer.

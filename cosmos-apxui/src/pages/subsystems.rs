@@ -5,16 +5,14 @@ use cosmic::{
     self,
     cosmic_theme::{self, Spacing},
     iced::Length,
-    iced_wgpu::graphics::text,
     iced_widget, theme,
     widget::{
         self, nav_bar,
         segmented_button::{self, Entity, SingleSelect, VerticalSegmentedButton},
-        Toasts,
     },
 };
 
-use tracing::{error, warn};
+use tracing::warn;
 
 pub struct SubSystemsModel {
     nav_bar: nav_bar::Model,

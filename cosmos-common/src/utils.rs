@@ -1,5 +1,5 @@
 use cosmic::{
-    cosmic_theme::Spacing, iced::{self, Alignment, Background, Border, Color, Length, Shadow}, iced_widget, theme, widget::{self}, Element, Theme
+    cosmic_theme::Spacing, iced::{self, Alignment, Background, Border, Color, Length, Shadow}, iced_widget, widget::{self}, Element, Theme
 };
 
 pub fn labelled_info<'a, Message: 'static + Clone>(

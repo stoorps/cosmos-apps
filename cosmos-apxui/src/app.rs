@@ -20,7 +20,7 @@ use cosmic::{
 };
 use futures_util::SinkExt;
 use std::collections::HashMap;
-use tracing::{error, warn};
+use tracing::error;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const APP_ICON: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/icon.svg");
