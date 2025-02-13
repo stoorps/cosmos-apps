@@ -1,9 +1,10 @@
 mod drive;
 mod partition;
+mod usage;
 
 pub use drive::*;
 pub use partition::PartitionModel;
-
+pub use usage::*;
 // async fn get_size(path: impl Into<String> + std::fmt::Display) -> Result<String> {
 //     let client = udisks2::Client::new().await?;
 //     let object = client

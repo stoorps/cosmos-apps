@@ -15,7 +15,7 @@ use cosmic::widget::text::heading;
 use cosmic::widget::{self, container, flex_row, horizontal_space, icon, menu, nav_bar, Space};
 use cosmic::{cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element};
 use cosmos_common::{bytes_to_pretty, labelled_info};
-use cosmos_dbus::udisks::DriveModel;
+use cosmos_dbus::disks::DriveModel;
 use futures_util::SinkExt;
 use std::collections::HashMap;
 
@@ -85,7 +85,10 @@ impl Application for AppModel {
             .block_on(async {
                 let drives = match DriveModel::get_drives().await {
                     Ok(drives) => drives,
-                    Err(_) => return,
+                    Err(e) => {
+                        println!("Error: {}", e);
+                        return;
+                    },
                 };
 
                 for drive in drives {
@@ -345,6 +348,8 @@ impl Application for AppModel {
     /// beginning of the application, and persist through its lifetime.
     fn subscription(&self) -> Subscription<Self::Message> {
         struct MySubscription;
+
+        
 
         Subscription::batch(vec![
             // Create a subscription which emits updates through a channel.

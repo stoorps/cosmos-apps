@@ -22,7 +22,7 @@ use cosmic::{
     Apply, Element, Task,
 };
 use cosmos_common::bytes_to_pretty;
-use cosmos_dbus::udisks::{DriveModel, PartitionModel};
+use cosmos_dbus::disks::{DriveModel, PartitionModel};
 
 use crate::app::Message;
 
