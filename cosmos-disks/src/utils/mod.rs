@@ -1,38 +1,76 @@
+use core::num;
+
 use cosmic::{
-    iced::Alignment,
-    iced_widget::{self, button},
-    widget::{self, container, segmented_button::SingleSelectModel, text, Button},
-    Element, Task,
+    cosmic_theme::{self, palette::WithAlpha, CosmicPalette, Theme},
+    iced::{
+        alignment::Horizontal::Left, keyboard::Key, Alignment, Background, Color, Length, Radius,
+        Shadow, Vector,
+    },
+    iced_widget::{
+        self,
+        button::{self, Style},
+        column, row,
+    },
+    widget::{
+        self,
+        button::Catalog,
+        container, icon,
+        segmented_button::SingleSelectModel,
+        text::{self, caption, caption_heading},
+        Button,
+    },
+    Apply, Element, Task,
 };
 use cosmos_common::bytes_to_pretty;
 use cosmos_dbus::udisks::{DriveModel, PartitionModel};
 
+use crate::app::Message;
+
 #[derive(Debug, Clone)]
-enum VolumesControlMessage {
+pub enum VolumesControlMessage {
     SegmentSelected(usize),
     CustomButtonClicked(usize), // Example message for custom button
 }
 
-pub struct VolumesControl<'a> {
-    selected_segment: usize,
-    segments: Vec<Segment<'a>>,
-    model: &'a DriveModel,
+pub struct VolumesControl {
+    pub selected_segment: usize,
+    pub segments: Vec<Segment>,
+    pub model: DriveModel,
 }
 
-struct Segment<'a> {
-    //content: Element<'a, VolumesControlMessage>, // Store the custom content
-    label: String,
-    name: String,
-    partition_type: String,
-    size: u64,
-    offset: u64,
-    state: bool,
-    is_free_space: bool, // State for the underlying button
-    width: u32,
-    view: Option<Element<'a, VolumesControlMessage>>,
+pub struct Segment {
+    pub label: String,
+    pub name: String,
+    pub partition_type: String,
+    pub size: u64,
+    pub offset: u64,
+    pub state: bool,
+    pub is_free_space: bool, // State for the underlying button
+    pub width: u16,
+    pub partition: Option<PartitionModel>,
+    //view: Option<Element<'a, VolumesControlMessage>>,
 }
 
-impl<'a> Segment<'a> {
+#[derive(Copy, Clone)]
+pub enum ToggleState {
+    Normal,
+    Active,
+    Disabled,
+    Hovered,
+    Pressed,
+}
+
+impl ToggleState {
+    pub fn active_or(selected: &bool, toggle: ToggleState) -> Self {
+        if *selected {
+            ToggleState::Active
+        } else {
+            toggle
+        }
+    }
+}
+
+impl Segment {
     pub fn free_space(offset: u64, size: u64) -> Self {
         Self {
             label: "Free Space".into(),
@@ -43,7 +81,8 @@ impl<'a> Segment<'a> {
             state: false,
             is_free_space: true,
             width: 0,
-            view: None,
+            partition: None,
+            //view: None,
         }
     }
 
@@ -57,7 +96,7 @@ impl<'a> Segment<'a> {
             state: false,
             is_free_space: false,
             width: 0,
-            view: None,
+            partition: Some(partition.clone()),
         }
     }
 
@@ -71,7 +110,14 @@ impl<'a> Segment<'a> {
         ordered_partitions.sort_by(|a, b| a.offset.cmp(&b.offset));
 
         let mut segments = vec![];
-        let mut current_offset = 0u64;
+        let mut current_offset = ordered_partitions.first().unwrap().offset; //TODO: HANDLE UNWRAP
+
+        if current_offset > 1048576 {
+            //TODO: There seems to be 1024KB at the start of all drives.
+            //      We need to make sure this is ALWAYS present, or the same size.
+            current_offset = 0;
+        }
+
         for mut p in ordered_partitions {
             if p.offset > current_offset {
                 //add in a free space segment.
@@ -83,40 +129,60 @@ impl<'a> Segment<'a> {
             }
 
             segments.push(Segment::new(&p));
-            p.offset = p.size;
+            current_offset += p.size;
         }
 
-        if current_offset < drive.size {
+        //TODO: Hack to hide weird end portion... find out what this is.
+        if current_offset < drive.size - 5242880 {
             segments.push(Segment::free_space(
                 current_offset,
                 drive.size - current_offset,
             ));
         }
 
-        segments
-            .iter_mut()
-            .for_each(|s| s.width = ((drive.size / s.size) * 100) as u32);
+        segments.iter_mut().for_each(|s| {
+            s.width = (((s.size as f64 / drive.size as f64) * 1000.).log10().ceil() as u16).max(1);
+
+            println!(
+                "DRIVE: {} PARTITION: {} SIZE: {} WIDTH: {}",
+                drive.pretty_name(),
+                s.name,
+                s.size,
+                s.width
+            );
+        });
 
         segments
     }
 
-    pub fn get_segment_control(&self) -> Element<'a, VolumesControlMessage> {
+    pub fn get_segment_control<'a>(&self) -> Element<'a, Message> {
         if self.is_free_space {
             container(
-                iced_widget::column![text("Free space"), text(bytes_to_pretty(&self.size, false))]
-                    .align_x(Alignment::Center),
+                iced_widget::column![
+                    caption_heading("Free space").center(),
+                    caption(bytes_to_pretty(&self.size, false)).center()
+                ]
+                .spacing(5)
+                .align_x(Alignment::Center),
             )
+            .padding(5)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
         } else {
             container(
                 iced_widget::column![
-                    text("LABEL WILL GO HERE"),
-                    text(self.name.clone()),
-                    text(self.partition_type.clone()),
-                    text(bytes_to_pretty(&self.size, false))
+                    caption_heading(self.name.clone()).center(),
+                    caption("LABEL WILL GO HERE").center(),
+                    caption(self.partition_type.clone()).center(),
+                    caption(bytes_to_pretty(&self.size, false)).center()
                 ]
+                .spacing(5)
                 .align_x(Alignment::Center),
             )
+            .padding(5)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
         }
     }
@@ -124,11 +190,11 @@ impl<'a> Segment<'a> {
 
 pub type VolumesModel = Vec<PartitionModel>;
 
-impl<'a> VolumesControl<'a> {
-    pub fn new(model: &'a DriveModel) -> Self {
+impl VolumesControl {
+    pub fn new(model: DriveModel) -> Self {
         let drive_size = model.size;
 
-        let mut segments: Vec<Segment<'a>> = Segment::get_segments(model);
+        let mut segments: Vec<Segment> = Segment::get_segments(&model);
         segments.first_mut().unwrap().state = true; //TODO: HANDLE UNWRAP.
 
         Self {
@@ -138,58 +204,116 @@ impl<'a> VolumesControl<'a> {
         }
     }
 
-    pub fn update(&mut self, message: VolumesControlMessage) -> Task<VolumesControlMessage> {
+    pub fn update(&mut self, message: VolumesControlMessage) {
         match message {
             VolumesControlMessage::SegmentSelected(index) => {
                 self.selected_segment = index;
-                Task::none()
+                self.segments.iter_mut().for_each(|s| s.state = false);
+                self.segments.get_mut(index).unwrap().state = true;
             }
             VolumesControlMessage::CustomButtonClicked(index) => {
                 // Handle the custom button click within the segment
                 println!("Button in segment {} clicked!", index);
-                Task::none()
             }
         }
     }
 
-    pub fn view(&self) -> Element<'a, VolumesControlMessage> {
-        let segment_buttons: Vec<Element<'a, VolumesControlMessage>> = self
+    pub fn view<'a>(&self) -> Element<'a, Message> {
+        let segment_buttons: Vec<Element<'a, Message>> = self
             .segments
             .iter()
             .enumerate()
             .map(|(index, segment)| {
-                widget::button::custom(segment.get_segment_control())
-                    .on_press(VolumesControlMessage::SegmentSelected(index))
-                    // .style(|theme, status| {
-                    //     status
-                    // }) // Apply a custom style
+                let active_state = ToggleState::active_or(&segment.state, ToggleState::Normal);
+                let hovered_state = ToggleState::active_or(&segment.state, ToggleState::Hovered);
+
+                cosmic::widget::button::custom(segment.get_segment_control())
+                    .on_press(Message::VolumesMessage(
+                        VolumesControlMessage::SegmentSelected(index),
+                    ))
+                    .class(cosmic::theme::Button::Custom {
+                        active: Box::new(move |b, theme| get_button_style(active_state, theme)),
+                        disabled: Box::new(|theme| get_button_style(ToggleState::Disabled, theme)),
+                        hovered: Box::new(move |_, theme| get_button_style(hovered_state, theme)),
+                        pressed: Box::new(|_, theme| get_button_style(ToggleState::Pressed, theme)),
+                    })
+                    .height(Length::Fixed(100.))
+                    .width(Length::FillPortion(segment.width))
                     .into()
             })
             .collect();
 
-        cosmic::widget::Row::from_vec(segment_buttons).into()
+        let selected = self.segments.get(self.selected_segment).unwrap(); //TODO: Handle unwrap
+        let play_pause_icon = match &selected.partition {
+            Some(p) => {
+                match p.usage //TODO: More solid check than using the output of df to see if mounted.
+            {
+                Some(_) => "media-playback-stop-symbolic",
+                None => "media-playback-start-symbolic",
+            }
+            }
+            None => "media-playback-start-symbolic",
+        };
+
+        container(
+            column![
+                cosmic::widget::Row::from_vec(segment_buttons)
+                    .spacing(5)
+                    .width(Length::Fill),
+                row![
+                    widget::button::custom(icon::from_name(play_pause_icon)),
+                    widget::button::custom(icon::from_name("edit-find-symbolic")),
+                    widget::horizontal_space(),
+                    widget::button::custom(icon::from_name("edit-delete-symbolic")),
+                ] //TODO: Get better icons
+            ]
+            .spacing(10),
+        )
+        .width(Length::Fill)
+        .padding(10)
+        .class(cosmic::style::Container::Card)
+        .into()
     }
 }
 
-// Custom button style
-struct SegmentButtonStyle {
-    is_selected: bool,
-}
+fn get_button_style(
+    state: ToggleState,
+    theme: &cosmic::theme::Theme,
+) -> cosmic::widget::button::Style {
+    let mut base = cosmic::widget::button::Style {
+        shadow_offset: Shadow::default().offset,
+        background: Some(cosmic::iced::Background::Color(Color::TRANSPARENT)),
+        overlay: None,
+        border_radius: (theme.cosmic().corner_radii.radius_s).into(),
+        border_width: 0.,
+        border_color: Color::TRANSPARENT,
+        outline_width: 1.,
+        outline_color: Color::TRANSPARENT,
+        icon_color: None,
+        text_color: None, // Some(theme.cosmic().accent_button.base.into()),
+    };
 
-// impl Style for SegmentButtonStyle {
-//     fn style(&self) -> button::Style {
-//         if self.is_selected {
-//             button::Style {
-//                 background: iced::Background::Color(iced::Color::from_rgb(0.7, 0.7, 0.7)), // Example
-//                 text_color: iced::Color::WHITE,
-//                 ..Default::default()
-//             }
-//         } else {
-//             button::Style {
-//                 background: iced::Background::Color(iced::Color::WHITE), // Example
-//                 text_color: iced::Color::BLACK,
-//                 ..Default::default()
-//             }
-//         }
-//     }
-// }
+    match state {
+        ToggleState::Normal => {}
+        ToggleState::Active => {
+            base.border_color = theme.cosmic().accent_color().into();
+            base.outline_color = theme.cosmic().accent_color().into();
+            base.background = Some(Background::Color(
+                theme.cosmic().accent_color().with_alpha(0.2).into(),
+            ));
+
+            //base.text_color = Some(theme.cosmic().accent_button.base.into());
+        }
+        ToggleState::Disabled => todo!(),
+        ToggleState::Hovered => {
+            base.text_color = Some(theme.cosmic().accent_button.base.into());
+            base.background = Some(Background::Color(theme.cosmic().button.hover.into()));
+        }
+        ToggleState::Pressed => {
+            base.border_color = theme.cosmic().accent_color().into();
+            base.outline_color = theme.cosmic().accent_color().into();
+        }
+    }
+
+    base
+}

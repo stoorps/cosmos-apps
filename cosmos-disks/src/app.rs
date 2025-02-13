@@ -2,14 +2,17 @@
 
 use crate::config::Config;
 use crate::fl;
-use crate::utils::{VolumesControl, VolumesModel};
+use crate::utils::{VolumesControl, VolumesControlMessage, VolumesModel};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::iced::alignment::Horizontal::Left;
 use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::{Alignment, Executor, Length, Subscription};
+use cosmic::iced_core::Layout;
 use cosmic::iced_widget::{Column, Row};
+use cosmic::widget::menu::menu_button;
 use cosmic::widget::text::heading;
-use cosmic::widget::{self, container, flex_row, icon, menu, nav_bar};
+use cosmic::widget::{self, container, flex_row, horizontal_space, icon, menu, nav_bar, Space};
 use cosmic::{cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element};
 use cosmos_common::{bytes_to_pretty, labelled_info};
 use cosmos_dbus::udisks::DriveModel;
@@ -32,7 +35,6 @@ pub struct AppModel {
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     // Configuration data that persists between application runs.
     config: Config,
-    volumes_control: Option<VolumesControl<'static>>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -43,6 +45,7 @@ pub enum Message {
     ToggleContextPage(ContextPage),
     UpdateConfig(Config),
     LaunchUrl(String),
+    VolumesMessage(VolumesControlMessage),
 }
 
 /// Create a COSMIC application from the app model
@@ -83,9 +86,16 @@ impl Application for AppModel {
                 };
 
                 for drive in drives {
+                    let icon = match drive.removable {
+                        true => "drive-removable-media-symbolic",
+                        false => "disks-symbolic",
+                    };
+
                     nav.insert()
                         .text(drive.pretty_name())
-                        .data::<DriveModel>(drive);
+                        .data::<VolumesControl>(VolumesControl::new(drive.clone()))
+                        .data::<DriveModel>(drive)
+                        .icon(icon::from_name(icon));
                 }
             });
 
@@ -108,7 +118,6 @@ impl Application for AppModel {
         // Construct the app model with the runtime's core.
         let mut app = AppModel {
             core,
-            volumes_control: None,
             context_page: ContextPage::default(),
             nav,
             key_binds: HashMap::new(),
@@ -135,15 +144,55 @@ impl Application for AppModel {
 
     /// Elements to pack at the start of the header bar.
     fn header_start(&self) -> Vec<Element<Self::Message>> {
-        let menu_bar = menu::bar(vec![menu::Tree::with_children(
-            menu::root(fl!("view")),
-            menu::items(
-                &self.key_binds,
-                vec![menu::Item::Button(fl!("about"), None, MenuAction::About)],
+        let menu_bar = menu::bar(vec![
+            menu::Tree::with_children(
+                menu::root("Image"),
+                menu::items(
+                    &self.key_binds,
+                    vec![
+                        menu::Item::Button("New Disk Image", None, MenuAction::About),
+                        menu::Item::Button("Attach Disk Image", None, MenuAction::About),
+                        menu::Item::Button("Create Disk From Drive", None, MenuAction::About),
+                        menu::Item::Button("Restore Image to Drive", None, MenuAction::About),
+                    ],
+                ),
             ),
-        )]);
+            menu::Tree::with_children(
+                menu::root("Disk"),
+                menu::items(
+                    &self.key_binds,
+                    vec![
+                        menu::Item::Button("Eject", None, MenuAction::About),
+                        menu::Item::Button("Power Off", None, MenuAction::About),
+                        menu::Item::Button("Format Disk", None, MenuAction::About),
+                        menu::Item::Button("Benchmark Disk", None, MenuAction::About),
+                        menu::Item::Button("SMART Data & Self-Tests", None, MenuAction::About),
+                        menu::Item::Button("Drive Settings", None, MenuAction::About),
+                        menu::Item::Button("Standby Now", None, MenuAction::About),
+                        menu::Item::Button("Wake-up From Standby", None, MenuAction::About),
+                    ],
+                ),
+            ),
+            menu::Tree::with_children(
+                menu::root(fl!("view")),
+                menu::items(
+                    &self.key_binds,
+                    vec![menu::Item::Button(fl!("about"), None, MenuAction::About)],
+                ),
+            ),
+        ]);
 
-        vec![menu_bar.into()]
+        // let end_bar = menu::bar(vec![menu::Tree::with_children(
+        //     menu_button(vec![widget::icon::from_name("open-menu-symbolic").into()])
+        //         .width(Length::Shrink),
+        //     menu::items(
+        //         &self.key_binds,
+        //         vec![menu::Item::Button(fl!("about"), None, MenuAction::About)],
+        //     ),
+        // )])
+        // .width(Length::Fixed(50.));
+
+        vec![menu_bar.into()] //, horizontal_space().into(), end_bar.into()]
     }
 
     /// Allows overriding the default nav bar widget.
@@ -199,7 +248,7 @@ impl Application for AppModel {
     /// events received by widgets will be passed to the update method.
     fn view(&self) -> Element<Self::Message> {
         match self.nav.active_data::<DriveModel>() {
-            None => widget::text::title1(fl!("welcome"))
+            None => widget::text::title1("No disk selected")
                 .apply(widget::container)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -208,49 +257,79 @@ impl Application for AppModel {
                 .into(),
 
             Some(drive) => {
-                // let volumes: Vec<Element<Self::Message>> = drive
-                //     .partitions
-                //     .iter()
-                //     .map(|p| {
-                //         let mut name = p.name.clone();
-                //         if name.len() == 0 {
-                //             name = format!("Partition {}", &p.number);
-                //         } else {
-                //             name = format!("Partition {}: {}", &p.number, name);
-                //         }
+                let volumes_control = self.nav.active_data::<VolumesControl>().unwrap(); //TODO: Handle unwrap.
 
-                //         let column = match &p.usage {
-                //             Some(usage) => iced_widget::column![
-                //                 heading(name),
-                //                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
-                //                 labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
-                //                 labelled_info("Mounted at", &usage.mount_point),
-                //                 labelled_info("Contents", &p.partition_type),
-                //                 labelled_info("Device", &p.device_path),
-                //                 labelled_info("UUID", &p.uuid),
-                //             ],
-                //             None => iced_widget::column![
-                //                 heading(name),
-                //                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
-                //                 labelled_info("Contents", &p.partition_type),
-                //                 labelled_info("Device", &p.device_path),
-                //                 labelled_info("UUID", &p.uuid),
-                //             ],
-                //         };
+                let segment = volumes_control
+                    .segments
+                    .get(volumes_control.selected_segment)
+                    .unwrap(); //TODO: Handle unwrap.
+                let info = match segment.partition.clone() {
+                    Some(p) => {
+                        let mut name = p.name.clone();
+                        if name.len() == 0 {
+                            name = format!("Partition {}", &p.number);
+                        } else {
+                            name = format!("Partition {}: {}", &p.number, name);
+                        }
 
-                //         container(column).into()
-                //     })
-                //     .collect();
+                        match &p.usage {
+                            Some(usage) => iced_widget::column![
+                                heading(name),
+                                Space::new(0, 10),
+                                labelled_info("Size", bytes_to_pretty(&p.size, true)),
+                                labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
+                                labelled_info("Mounted at", &usage.mount_point),
+                                labelled_info("Contents", &p.partition_type),
+                                labelled_info("Device", &p.device_path),
+                                labelled_info("UUID", &p.uuid),
+                            ]
+                            .spacing(5),
+
+                            None => iced_widget::column![
+                                heading(name),
+                                Space::new(0, 10),
+                                labelled_info("Size", bytes_to_pretty(&p.size, true)),
+                                labelled_info("Contents", &p.partition_type),
+                                labelled_info("Device", &p.device_path),
+                                labelled_info("UUID", &p.uuid),
+                            ]
+                            .spacing(5),
+                        }
+                    }
+                    None => {
+                        iced_widget::column![
+                            heading(&segment.label),
+                            labelled_info("Size", bytes_to_pretty(&segment.size, true)),
+                            //labelled_info("Contents", &segment.partition_type),
+                            // labelled_info("Device", &segment.device_path),
+                            // labelled_info("UUID", &p.uuid),
+                        ]
+                        .spacing(5)
+                    }
+                };
 
                 iced_widget::column![
-                    labelled_info("Model", &drive.model),
-                    labelled_info("Serial", &drive.serial),
-                    labelled_info("Size", bytes_to_pretty(&drive.size, true)),
-                    //labelled_info("Partitioning", drive.pa),
-                    heading("Volumes"),
-                    //flex_row(volumes),
-                    VolumesControl::new(drive).view().into()
+                    iced_widget::column![
+                        heading(drive.pretty_name()),
+                        Space::new(0, 10),
+                        labelled_info("Model", &drive.model),
+                        labelled_info("Serial", &drive.serial),
+                        labelled_info("Size", bytes_to_pretty(&drive.size, true)),
+                    ]
+                    .spacing(5)
+                    .width(Length::Fill),
+                    iced_widget::column![
+                        heading("Volumes"),
+                        Space::new(0, 10),
+                        volumes_control.view()
+                    ]
+                    .spacing(5)
+                    .width(Length::Fill),
+                    info
                 ]
+                .spacing(60)
+                .padding(20)
+                .width(Length::Fill)
                 .into()
             }
         }
@@ -322,6 +401,10 @@ impl Application for AppModel {
                     eprintln!("failed to open {url:?}: {err}");
                 }
             },
+            Message::VolumesMessage(volumes_control_message) => {
+                let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
+                volumes_control.update(volumes_control_message);
+            }
         }
         Task::none()
     }
@@ -330,9 +413,6 @@ impl Application for AppModel {
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
         // Activate the page in the model.
         self.nav.activate(id);
-        self.volumes_control = Some(VolumesControl::new(
-            &self.nav.active_data::<DriveModel>().unwrap(),
-        ));
         self.update_title()
     }
 }
