@@ -3,8 +3,12 @@
 mod app;
 mod config;
 mod i18n;
+mod utils;
 
+//#[tokio::main]
 fn main() -> cosmic::iced::Result {
+    //tracing_subscriber::fmt().init();
+
     // Get the system's preferred languages.
     let requested_languages = i18n_embed::DesktopLanguageRequester::requested_languages();
 

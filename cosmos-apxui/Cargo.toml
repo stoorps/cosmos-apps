@@ -10,6 +10,7 @@ repository = "https://github.com/stoorps/cosmos-apps"
 vergen = { workspace = true }
 
 [dependencies]
+cosmos-common = { workspace = true }
 apx-shim = { workspace = true }
 futures-util = { workspace = true }
 i18n-embed-fl = { workspace = true }

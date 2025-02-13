@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-trait = "0.1.86"
+libcosmic = { workspace = true }
+num-format = "0.4.4"
+tokio.workspace = true

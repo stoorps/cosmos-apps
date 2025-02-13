@@ -2,12 +2,17 @@
 
 use crate::config::Config;
 use crate::fl;
+use crate::utils::{VolumesControl, VolumesModel};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::{Alignment, Length, Subscription};
-use cosmic::widget::{self, icon, menu, nav_bar};
-use cosmic::{cosmic_theme, theme, Application, ApplicationExt, Apply, Element};
+use cosmic::iced::{Alignment, Executor, Length, Subscription};
+use cosmic::iced_widget::{Column, Row};
+use cosmic::widget::text::heading;
+use cosmic::widget::{self, container, flex_row, icon, menu, nav_bar};
+use cosmic::{cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element};
+use cosmos_common::{bytes_to_pretty, labelled_info};
+use cosmos_dbus::udisks::DriveModel;
 use futures_util::SinkExt;
 use std::collections::HashMap;
 
@@ -27,6 +32,7 @@ pub struct AppModel {
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     // Configuration data that persists between application runs.
     config: Config,
+    volumes_control: Option<VolumesControl<'static>>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -66,25 +72,43 @@ impl Application for AppModel {
         // Create a nav bar with three page items.
         let mut nav = nav_bar::Model::default();
 
-        nav.insert()
-            .text(fl!("page-id", num = 1))
-            .data::<Page>(Page::Page1)
-            .icon(icon::from_name("applications-science-symbolic"))
-            .activate();
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let drives = match DriveModel::get_drives().await {
+                    Ok(drives) => drives,
+                    Err(_) => return,
+                };
 
-        nav.insert()
-            .text(fl!("page-id", num = 2))
-            .data::<Page>(Page::Page2)
-            .icon(icon::from_name("applications-system-symbolic"));
+                for drive in drives {
+                    nav.insert()
+                        .text(drive.pretty_name())
+                        .data::<DriveModel>(drive);
+                }
+            });
 
-        nav.insert()
-            .text(fl!("page-id", num = 3))
-            .data::<Page>(Page::Page3)
-            .icon(icon::from_name("applications-games-symbolic"));
+        // nav.insert()
+        //     .text(fl!("page-id", num = 1))
+        //     .data::<Page>(Page::Page1)
+        //     .icon(icon::from_name("applications-science-symbolic"))
+        //     .activate();
+
+        // nav.insert()
+        //     .text(fl!("page-id", num = 2))
+        //     .data::<Page>(Page::Page2)
+        //     .icon(icon::from_name("applications-system-symbolic"));
+
+        // nav.insert()
+        //     .text(fl!("page-id", num = 3))
+        //     .data::<Page>(Page::Page3)
+        //     .icon(icon::from_name("applications-games-symbolic"));
 
         // Construct the app model with the runtime's core.
         let mut app = AppModel {
             core,
+            volumes_control: None,
             context_page: ContextPage::default(),
             nav,
             key_binds: HashMap::new(),
@@ -122,6 +146,33 @@ impl Application for AppModel {
         vec![menu_bar.into()]
     }
 
+    /// Allows overriding the default nav bar widget.
+    fn nav_bar(&self) -> Option<Element<cosmic::app::Message<Self::Message>>> {
+        if !self.core().nav_bar_active() {
+            return None;
+        }
+
+        let nav_model = self.nav_model()?;
+
+        let mut nav = widget::nav_bar(nav_model, |id| {
+            cosmic::app::Message::Cosmic(cosmic::app::cosmic::Message::NavBar(id))
+        })
+        .on_context(|id| {
+            cosmic::app::Message::Cosmic(cosmic::app::cosmic::Message::NavBarContext(id))
+        })
+        // .context_menu(self.nav_context_menu(self.nav_bar()))
+        .into_container()
+        // XXX both must be shrink to avoid flex layout from ignoring it
+        .width(cosmic::iced::Length::Shrink)
+        .height(cosmic::iced::Length::Shrink);
+
+        if !self.core().is_condensed() {
+            nav = nav.max_width(280);
+        }
+
+        Some(Element::from(nav))
+    }
+
     /// Enables the COSMIC application to create a nav bar with this model.
     fn nav_model(&self) -> Option<&nav_bar::Model> {
         Some(&self.nav)
@@ -147,13 +198,62 @@ impl Application for AppModel {
     /// Application events will be processed through the view. Any messages emitted by
     /// events received by widgets will be passed to the update method.
     fn view(&self) -> Element<Self::Message> {
-        widget::text::title1(fl!("welcome"))
-            .apply(widget::container)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center)
-            .into()
+        match self.nav.active_data::<DriveModel>() {
+            None => widget::text::title1(fl!("welcome"))
+                .apply(widget::container)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center)
+                .into(),
+
+            Some(drive) => {
+                // let volumes: Vec<Element<Self::Message>> = drive
+                //     .partitions
+                //     .iter()
+                //     .map(|p| {
+                //         let mut name = p.name.clone();
+                //         if name.len() == 0 {
+                //             name = format!("Partition {}", &p.number);
+                //         } else {
+                //             name = format!("Partition {}: {}", &p.number, name);
+                //         }
+
+                //         let column = match &p.usage {
+                //             Some(usage) => iced_widget::column![
+                //                 heading(name),
+                //                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
+                //                 labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
+                //                 labelled_info("Mounted at", &usage.mount_point),
+                //                 labelled_info("Contents", &p.partition_type),
+                //                 labelled_info("Device", &p.device_path),
+                //                 labelled_info("UUID", &p.uuid),
+                //             ],
+                //             None => iced_widget::column![
+                //                 heading(name),
+                //                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
+                //                 labelled_info("Contents", &p.partition_type),
+                //                 labelled_info("Device", &p.device_path),
+                //                 labelled_info("UUID", &p.uuid),
+                //             ],
+                //         };
+
+                //         container(column).into()
+                //     })
+                //     .collect();
+
+                iced_widget::column![
+                    labelled_info("Model", &drive.model),
+                    labelled_info("Serial", &drive.serial),
+                    labelled_info("Size", bytes_to_pretty(&drive.size, true)),
+                    //labelled_info("Partitioning", drive.pa),
+                    heading("Volumes"),
+                    //flex_row(volumes),
+                    VolumesControl::new(drive).view().into()
+                ]
+                .into()
+            }
+        }
     }
 
     /// Register subscriptions for this application.
@@ -230,7 +330,9 @@ impl Application for AppModel {
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
         // Activate the page in the model.
         self.nav.activate(id);
-
+        self.volumes_control = Some(VolumesControl::new(
+            &self.nav.active_data::<DriveModel>().unwrap(),
+        ));
         self.update_title()
     }
 }
