@@ -4,12 +4,12 @@ use anyhow::Result;
 use serde::Deserialize;
 use tracing::{info, warn, error};
 use zbus::{
-    zvariant::{self, OwnedObjectPath, Value},
+    zvariant::{self, OwnedObjectPath},
     Connection,
 };
 use zbus_macros::proxy;
 
-use super::{get_usage_data, partition::{UDisks2PartitionProxy, UDisks2PartitionTableProxy}, PartitionModel};
+use super::{get_usage_data, manager::UDisks2ManagerProxy, partition::{UDisks2PartitionProxy, UDisks2PartitionTableProxy}, PartitionModel};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DriveModel {
@@ -33,17 +33,6 @@ pub struct DriveModel {
     pub path: String,
 }
 
-#[proxy(
-    default_service = "org.freedesktop.UDisks2",
-    default_path = "/org/freedesktop/UDisks2/Manager",
-    interface = "org.freedesktop.UDisks2.Manager"
-)]
-trait UDisks2Manager {
-    fn get_block_devices(
-        &self,
-        options: HashMap<String, Value<'_>>,
-    ) -> zbus::Result<Vec<zvariant::OwnedObjectPath>>; // No OwnedObjectPath here
-}
 
 #[proxy(
     default_service = "org.freedesktop.UDisks2",
@@ -100,12 +89,12 @@ impl DriveModel {
         self.name.split("/").last().unwrap().replace("_", " ") //TODO: Handle unwrap
     }
 
-    async fn from_proxy(
-        path: &OwnedObjectPath,
+    pub(crate) async fn from_proxy(
+        path: &str,
         drive_proxy: &UDisks2DriveProxy<'_>,
     ) -> Result<Self> {
         Ok(DriveModel {
-            name: path.as_str().to_owned(),
+            name: path.to_owned(),
             path: path.to_string(),
             size: drive_proxy.size().await?,
             id: drive_proxy.id().await?,
@@ -229,3 +218,5 @@ impl DriveModel {
         Ok(drives.into_values().collect())
     }
 }
+
+

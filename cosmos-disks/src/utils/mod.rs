@@ -143,13 +143,13 @@ impl Segment {
         segments.iter_mut().for_each(|s| {
             s.width = (((s.size as f64 / drive.size as f64) * 1000.).log10().ceil() as u16).max(1);
 
-            println!(
-                "DRIVE: {} PARTITION: {} SIZE: {} WIDTH: {}",
-                drive.pretty_name(),
-                s.name,
-                s.size,
-                s.width
-            );
+            // println!(
+            //     "DRIVE: {} PARTITION: {} SIZE: {} WIDTH: {}",
+            //     drive.pretty_name(),
+            //     s.name,
+            //     s.size,
+            //     s.width
+            // );
         });
 
         segments

@@ -1,9 +1,5 @@
 use cosmic::{
-    cosmic_theme::Spacing,
-    iced::{self, Alignment, Background, Border, Color, Length, Shadow},
-    iced_widget,
-    widget::{self},
-    Element, Theme,
+    cosmic_theme::Spacing, iced::{self, Alignment, Background, Border, Color, Length, Shadow}, iced_widget, theme, widget::{self}, Element, Theme
 };
 
 pub fn labelled_info<'a, Message: 'static + Clone>(
@@ -14,6 +10,7 @@ pub fn labelled_info<'a, Message: 'static + Clone>(
         widget::text(label.into())
             .align_x(Alignment::End)
             .width(Length::FillPortion(1)),
+           // .class(theme::Text::Color(cosmic::theme::system_preference().cosmic().text_button.base.color.into())),
         widget::text(info.into()).width(Length::FillPortion(3)),
     ]
     .spacing(Spacing::default().space_s)
