@@ -2,8 +2,6 @@ mod drive;
 mod partition;
 mod usage;
 mod manager;
-mod block;
-mod filesystem;
 
 pub use drive::*;
 pub use partition::PartitionModel;

@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::Deserialize;
 use tracing::{info, warn, error};
+use udisks2::{block::BlockProxy, drive::DriveProxy, partition::PartitionProxy, partitiontable::PartitionTableProxy, Client};
 use zbus::{
     zvariant::{self, OwnedObjectPath, Value},
     Connection,
 };
 use zbus_macros::proxy;
 
-use super::{block::UDisks2BlockProxy, get_usage_data, manager::UDisks2ManagerProxy, partition::{PartitionProxy, PartitionTableProxy}, PartitionModel};
+use super::{get_usage_data, manager::UDisks2ManagerProxy, PartitionModel};
 
 #[derive(Debug, Clone)]
 pub struct DriveModel {
@@ -33,47 +34,6 @@ pub struct DriveModel {
     pub path: String,
 }
 
-#[proxy(
-    default_service = "org.freedesktop.UDisks2",
-    interface = "org.freedesktop.UDisks2.Drive"
-)]
-pub(crate) trait UDisks2Drive {
-    #[zbus(property)]
-    fn size(&self) -> zbus::Result<u64>;
-    #[zbus(property)]
-    fn can_power_off(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn ejectable(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn id(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn model(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn serial(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn vendor(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn revision(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn removable(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn optical(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn optical_blank(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn media_removable(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn media_change_detected(&self) -> zbus::Result<bool>;
-    #[zbus(property)]
-    fn media_available(&self) -> zbus::Result<bool>;
-
-
-    fn eject(&self, options: HashMap<String, Value<'_>>) -> zbus::Result<()>;
-    fn power_off(&self, options: HashMap<String, Value<'_>>) -> zbus::Result<()>;
-
-
-
-}
 
 #[derive(Debug, Clone)]
 struct DriveBlockPair {
@@ -88,7 +48,7 @@ impl DriveModel {
 
     pub(crate) async fn from_proxy(
         path: &str,
-        drive_proxy: &UDisks2DriveProxy<'_>,
+        drive_proxy: &DriveProxy<'_>,
     ) -> Result<Self> {
         Ok(DriveModel {
             name: path.to_owned(),
@@ -119,7 +79,7 @@ impl DriveModel {
         let mut drive_paths: Vec<DriveBlockPair> = vec![];
 
         for path in block_paths {
-            let block_device = match UDisks2BlockProxy::new(&connection, &path).await {
+            let block_device = match BlockProxy::builder(&connection).path(&path)?.build().await {
                 Ok(d) => d,
                 Err(e) => {
                     info!("Could not get block device: {}", e);
@@ -128,7 +88,7 @@ impl DriveModel {
             };
 
             //Drive nodes don't have a .Partition interface assigned.
-            let _ = match PartitionProxy::new(&connection, &path).await {
+            let _ = match PartitionProxy::builder(&connection).path(&path)?.build().await {
                 Ok(e) => match e.table().await {
                     Ok(_) => {
                         continue;
@@ -152,6 +112,7 @@ impl DriveModel {
 
     pub async fn get_drives() -> Result<Vec<DriveModel>> {
         let connection = Connection::system().await?;
+        let client = Client::new_for_connection(Connection::system().await?).await?;
         let drive_paths = Self::get_drive_paths(&connection).await?;
 
 
@@ -159,7 +120,7 @@ impl DriveModel {
         let mut usage_data = get_usage_data()?;
 
         for pair in drive_paths {
-            let drive_proxy = UDisks2DriveProxy::new(&connection, &pair.drive_path).await?;
+            let drive_proxy = DriveProxy::builder(&connection).path(&pair.drive_path)?.build().await?;
             let mut drive = match DriveModel::from_proxy(&pair.drive_path, &drive_proxy).await {
                 Ok(d) => d,
                 Err(e) => {
@@ -169,7 +130,7 @@ impl DriveModel {
             };
 
             let partition_table_proxy =
-                match PartitionTableProxy::new(&connection, &pair.block_path).await {
+                match PartitionTableProxy::builder(&connection).path(&pair.block_path)?.build().await {
                     Ok(p) => p,
                     Err(e) => {
                         error!("Error getting partition table: {}", e);
@@ -187,7 +148,7 @@ impl DriveModel {
 
             for partition_path in partition_paths {
                 let partition_proxy =
-                    match PartitionProxy::new(&connection, &partition_path).await {
+                    match PartitionProxy::builder(&connection).path(&partition_path)?.build().await {
                         Ok(p) => p,
                         Err(e) => {
                             error!("Error getting partition info: {}", e);
@@ -206,7 +167,7 @@ impl DriveModel {
                 };
 
 
-                drive.partitions.push(PartitionModel::from_proxy(partition_path.clone(), usage, partition_proxy).await?);
+                drive.partitions.push(PartitionModel::from_proxy(&client, partition_path.clone(), usage, partition_proxy).await?);
             }
 
 

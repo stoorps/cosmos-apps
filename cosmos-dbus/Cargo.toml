@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-#udisks2 = { workspace = true }
+udisks2 = { workspace = true }
 zbus = { workspace = true }
 tokio = { workspace = true }
 zbus_macros = { workspace = true }
