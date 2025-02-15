@@ -4,14 +4,14 @@ use anyhow::Result;
 use serde::Deserialize;
 use tracing::{info, warn, error};
 use zbus::{
-    zvariant::{self, OwnedObjectPath},
+    zvariant::{self, OwnedObjectPath, Value},
     Connection,
 };
 use zbus_macros::proxy;
 
-use super::{get_usage_data, manager::UDisks2ManagerProxy, partition::{UDisks2PartitionProxy, UDisks2PartitionTableProxy}, PartitionModel};
+use super::{block::UDisks2BlockProxy, get_usage_data, manager::UDisks2ManagerProxy, partition::{PartitionProxy, PartitionTableProxy}, PartitionModel};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DriveModel {
     pub can_power_off: bool,
     pub ejectable: bool,
@@ -31,16 +31,6 @@ pub struct DriveModel {
     pub block_path: String,
     pub partitions: Vec<PartitionModel>,
     pub path: String,
-}
-
-
-#[proxy(
-    default_service = "org.freedesktop.UDisks2",
-    interface = "org.freedesktop.UDisks2.Block"
-)]
-trait UDisks2Block {
-    #[zbus(property)]
-    fn drive(&self) -> zbus::Result<zvariant::OwnedObjectPath>;
 }
 
 #[proxy(
@@ -76,6 +66,13 @@ pub(crate) trait UDisks2Drive {
     fn media_change_detected(&self) -> zbus::Result<bool>;
     #[zbus(property)]
     fn media_available(&self) -> zbus::Result<bool>;
+
+
+    fn eject(&self, options: HashMap<String, Value<'_>>) -> zbus::Result<()>;
+    fn power_off(&self, options: HashMap<String, Value<'_>>) -> zbus::Result<()>;
+
+
+
 }
 
 #[derive(Debug, Clone)]
@@ -131,7 +128,7 @@ impl DriveModel {
             };
 
             //Drive nodes don't have a .Partition interface assigned.
-            let _ = match UDisks2PartitionProxy::new(&connection, &path).await {
+            let _ = match PartitionProxy::new(&connection, &path).await {
                 Ok(e) => match e.table().await {
                     Ok(_) => {
                         continue;
@@ -172,7 +169,7 @@ impl DriveModel {
             };
 
             let partition_table_proxy =
-                match UDisks2PartitionTableProxy::new(&connection, &pair.block_path).await {
+                match PartitionTableProxy::new(&connection, &pair.block_path).await {
                     Ok(p) => p,
                     Err(e) => {
                         error!("Error getting partition table: {}", e);
@@ -190,7 +187,7 @@ impl DriveModel {
 
             for partition_path in partition_paths {
                 let partition_proxy =
-                    match UDisks2PartitionProxy::new(&connection, &partition_path).await {
+                    match PartitionProxy::new(&connection, &partition_path).await {
                         Ok(p) => p,
                         Err(e) => {
                             error!("Error getting partition info: {}", e);
@@ -212,10 +209,20 @@ impl DriveModel {
                 drive.partitions.push(PartitionModel::from_proxy(partition_path.clone(), usage, partition_proxy).await?);
             }
 
+
             drives.insert(drive.name.clone(), drive);
         }
 
-        Ok(drives.into_values().collect())
+        //Order b
+        let mut drives: Vec<DriveModel> = drives.into_values().collect();
+        drives.sort_by(|d1, d2| {
+            d1.removable.cmp(&d2.removable).then_with(|| {
+                d2.block_path.cmp(&d1.block_path) //TODO: understand this. d1 SHOULD come first in this compare... 
+            })
+        });
+        
+
+        Ok(drives)
     }
 }
 

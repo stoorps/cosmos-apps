@@ -12,7 +12,7 @@ use cosmic::{
         self,
         container, icon,
         text::{caption, caption_heading},
-    }, Element,
+    }, Element, Task,
 };
 use cosmos_common::bytes_to_pretty;
 use cosmos_dbus::disks::{DriveModel, PartitionModel};
@@ -22,6 +22,17 @@ use crate::app::Message;
 #[derive(Debug, Clone)]
 pub enum VolumesControlMessage {
     SegmentSelected(usize),
+    Add,
+    Mount,
+    Unmount,
+        Delete,
+
+}
+
+impl Into<Message> for VolumesControlMessage{
+    fn into(self) -> Message {
+        Message::VolumesMessage(self)
+    }
 }
 
 pub struct VolumesControl {
@@ -31,6 +42,7 @@ pub struct VolumesControl {
     pub model: DriveModel,
 }
 
+#[derive(Clone)]
 pub struct Segment {
     pub label: String,
     pub name: String,
@@ -186,14 +198,129 @@ impl VolumesControl {
         }
     }
 
-    pub fn update(&mut self, message: VolumesControlMessage) {
+    pub fn update(&mut self, message: VolumesControlMessage) -> Task<cosmic::app::Message<Message>> {
+        let partition_model = match self.segments.get(self.selected_segment)
+        {
+            Some(s) => &s.partition,
+            None => &None,
+        };
+
+
+
         match message {
             VolumesControlMessage::SegmentSelected(index) => {
                 self.selected_segment = index;
                 self.segments.iter_mut().for_each(|s| s.state = false);
                 self.segments.get_mut(index).unwrap().state = true;
             }
+            VolumesControlMessage::Add => {
+              
+            },
+            VolumesControlMessage::Mount => {
+                let segment = self.segments.get(self.selected_segment.clone()).cloned();
+                match segment.clone()
+                {
+                    Some(s) =>
+                    {
+                        match s.partition
+                        {
+                            Some(p) => {
+                                return Task::perform( async move {
+                                    match p.mount().await
+                                    {
+                                       Ok(_) =>  match DriveModel::get_drives().await
+                                        {
+                                            Ok(drives) => Ok(drives),
+                                            Err(e) => Err(e),
+                                        }
+                                        Err(e) => Err(e),
+                                        
+                                    }
+                                  
+                                   
+                                }, |result| match result {
+                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                    Err(e) => {println!("{e}"); Message::None.into()},
+                                });
+                            },
+                            None => return Task::none(),
+                        }
+                    },
+                    None => {}
+                }
+                return Task::none();
+            },
+            VolumesControlMessage::Unmount => {
+                let segment = self.segments.get(self.selected_segment.clone()).cloned();
+                match segment.clone()
+                {
+                    Some(s) =>
+                    {
+                        match s.partition
+                        {
+                            Some(p) => {
+                                return Task::perform( async move {
+                                    match p.unmount().await
+                                    {
+                                       Ok(_) =>  match DriveModel::get_drives().await
+                                        {
+                                            Ok(drives) => Ok(drives),
+                                            Err(e) => Err(e),
+                                        }
+                                        Err(e) => Err(e),
+                                        
+                                    }
+                                  
+                                   
+                                }, |result| match result {
+                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                    Err(e) => {println!("{e}"); Message::None.into()},
+                                });
+                            },
+                            None => return Task::none(),
+                        }
+                    },
+                    None => {}
+                }
+                return Task::none();
+
+            },
+            VolumesControlMessage::Delete => {
+                let segment = self.segments.get(self.selected_segment.clone()).cloned();
+                match segment.clone()
+                {
+                    Some(s) =>
+                    {
+                        match s.partition
+                        {
+                            Some(p) => {
+                                return Task::perform( async move {
+                                    match p.delete().await
+                                    {
+                                       Ok(_) =>  match DriveModel::get_drives().await
+                                        {
+                                            Ok(drives) => Ok(drives),
+                                            Err(e) => Err(e),
+                                        }
+                                        Err(e) => Err(e),
+                                        
+                                    }
+                                  
+                                   
+                                }, |result| match result {
+                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                    Err(e) => {println!("{e}"); Message::None.into()},
+                                });
+                            },
+                            None => return Task::none(),
+                        }
+                    },
+                    None => {}
+                }
+                return Task::none();
+            },
         }
+        Task::none()
     }
 
     pub fn view<'a>(&self) -> Element<'a, Message> {
@@ -222,15 +349,16 @@ impl VolumesControl {
             .collect();
 
         let selected = self.segments.get(self.selected_segment).unwrap(); //TODO: Handle unwrap
-        let play_pause_icon = match &selected.partition {
+        let action_button = match &selected.partition {
             Some(p) => {
                 match p.usage //TODO: More solid check than using the output of df to see if mounted.
             {
-                Some(_) => "media-playback-stop-symbolic",
-                None => "media-playback-start-symbolic",
+                Some(_) => widget::button::custom(icon::from_name( "media-playback-stop-symbolic")).on_press(VolumesControlMessage::Unmount.into()),
+                None =>widget::button::custom(icon::from_name( "media-playback-start-symbolic")).on_press(VolumesControlMessage::Mount.into()),
             }
             }
-            None => "media-playback-start-symbolic",
+            None =>widget::button::custom(icon::from_name( "list-add-symbolic")).on_press(VolumesControlMessage::Mount.into()),
+
         };
 
         container(
@@ -239,10 +367,10 @@ impl VolumesControl {
                     .spacing(10)
                     .width(Length::Fill),
                 row![
-                    widget::button::custom(icon::from_name(play_pause_icon)),
+                    action_button,
                     widget::button::custom(icon::from_name("edit-find-symbolic")),
                     widget::horizontal_space(),
-                    widget::button::custom(icon::from_name("edit-delete-symbolic")),
+                    widget::button::custom(icon::from_name("edit-delete-symbolic")).on_press(VolumesControlMessage::Delete.into()),
                 ] //TODO: Get better icons
             ]
             .spacing(10),

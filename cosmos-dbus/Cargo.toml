@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-udisks2 = { workspace = true }
+#udisks2 = { workspace = true }
 zbus = { workspace = true }
 tokio = { workspace = true }
 zbus_macros = { workspace = true }
@@ -14,3 +14,4 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing-subscriber = { workspace = true }
 futures = "0.3.31"
+enumflags2 = "0.7.11"

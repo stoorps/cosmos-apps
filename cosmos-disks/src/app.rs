@@ -7,9 +7,12 @@ use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::{Alignment, Length, Subscription};
+use cosmic::iced_widget::text;
 use cosmic::widget::text::heading;
-use cosmic::widget::{self, icon, menu, nav_bar, Space};
-use cosmic::{cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element};
+use cosmic::widget::{self, container, icon, menu, nav_bar, Space};
+use cosmic::{
+    cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element, Theme,
+};
 use cosmos_common::{bytes_to_pretty, labelled_info};
 use cosmos_dbus::disks::{DiskManager, DriveModel};
 use futures_util::{SinkExt, StreamExt};
@@ -32,6 +35,8 @@ pub struct AppModel {
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     // Configuration data that persists between application runs.
     config: Config,
+
+    status: Option<String>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -44,6 +49,8 @@ pub enum Message {
     VolumesMessage(VolumesControlMessage),
     DriveRemoved(String),
     DriveAdded(String),
+    None,
+    UpdateNav(Vec<DriveModel>, Option<String>),
 }
 
 /// Create a COSMIC application from the app model
@@ -70,57 +77,12 @@ impl Application for AppModel {
 
     /// Initializes the application with any given flags and startup commands.
     fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
-        // Create a nav bar with three page items.
-        let mut nav = nav_bar::Model::default();
-
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-                let drives = match DriveModel::get_drives().await {
-                    Ok(drives) => drives,
-                    Err(e) => {
-                        println!("Error: {}", e);
-                        return;
-                    },
-                };
-
-                for drive in drives {
-                    let icon = match drive.removable {
-                        true => "drive-removable-media-symbolic",
-                        false => "disks-symbolic",
-                    };
-
-                    nav.insert()
-                        .text(drive.pretty_name())
-                        .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                        .data::<DriveModel>(drive)
-                        .icon(icon::from_name(icon));
-                }
-            });
-
-        // nav.insert()
-        //     .text(fl!("page-id", num = 1))
-        //     .data::<Page>(Page::Page1)
-        //     .icon(icon::from_name("applications-science-symbolic"))
-        //     .activate();
-
-        // nav.insert()
-        //     .text(fl!("page-id", num = 2))
-        //     .data::<Page>(Page::Page2)
-        //     .icon(icon::from_name("applications-system-symbolic"));
-
-        // nav.insert()
-        //     .text(fl!("page-id", num = 3))
-        //     .data::<Page>(Page::Page3)
-        //     .icon(icon::from_name("applications-games-symbolic"));
-
         // Construct the app model with the runtime's core.
         let mut app = AppModel {
             core,
             context_page: ContextPage::default(),
-            nav,
+            nav: nav_bar::Model::default(),
+            status: None,
             key_binds: HashMap::new(),
             // Optional configuration file for an application.
             config: cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
@@ -140,7 +102,23 @@ impl Application for AppModel {
         // Create a startup command that sets the window title.
         let command = app.update_title();
 
-        (app, command)
+        let nav_command = Task::perform(
+            async {
+                match DriveModel::get_drives().await {
+                    Ok(drives) => Some(drives),
+                    Err(e) => {
+                        println!("Error: {}", e);
+                        return None;
+                    }
+                }
+            },
+            |drives| match drives {
+                None => return Message::None.into(),
+                Some(drives) => return Message::UpdateNav(drives, None).into(),
+            },
+        );
+
+        (app, command.chain(nav_command))
     }
 
     /// Elements to pack at the start of the header bar.
@@ -183,8 +161,23 @@ impl Application for AppModel {
             ),
         ]);
 
-
         vec![menu_bar.into()] //, horizontal_space().into(), end_bar.into()]
+    }
+
+    fn dialog(&self) -> Option<Element<Self::Message>> {
+        match self.status {
+            Some(ref s) => Some(
+                container(
+                    container(text(s.clone()))
+                        .class(cosmic::theme::Container::Card)
+                        .padding(20),
+                )
+                .padding(40)
+                .align_bottom(Length::Fill)
+                .into(),
+            ),
+            None => None,
+        }
     }
 
     /// Allows overriding the default nav bar widget.
@@ -272,7 +265,11 @@ impl Application for AppModel {
                                 labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
                                 labelled_info("Mounted at", &usage.mount_point),
                                 labelled_info("Contents", &p.partition_type),
-                                labelled_info("Device", &p.device_path),
+                                labelled_info("Device", match p.device_path
+                            {
+                                Some(s) => {s},
+                                None => "Unresolved".into()
+                            }),
                                 labelled_info("UUID", &p.uuid),
                             ]
                             .spacing(5),
@@ -282,7 +279,11 @@ impl Application for AppModel {
                                 Space::new(0, 10),
                                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
                                 labelled_info("Contents", &p.partition_type),
-                                labelled_info("Device", &p.device_path),
+                                labelled_info("Device", match p.device_path
+                                {
+                                    Some(s) => {s},
+                                    None => "Unresolved".into()
+                                }),
                                 labelled_info("UUID", &p.uuid),
                             ]
                             .spacing(5),
@@ -292,9 +293,6 @@ impl Application for AppModel {
                         iced_widget::column![
                             heading(&segment.label),
                             labelled_info("Size", bytes_to_pretty(&segment.size, true)),
-                            //labelled_info("Contents", &segment.partition_type),
-                            // labelled_info("Device", &segment.device_path),
-                            // labelled_info("UUID", &p.uuid),
                         ]
                         .spacing(5)
                     }
@@ -335,16 +333,12 @@ impl Application for AppModel {
     fn subscription(&self) -> Subscription<Self::Message> {
         struct DiskEventSubscription;
 
-        
-
         Subscription::batch(vec![
             // Create a subscription which emits updates through a channel.
             Subscription::run_with_id(
                 std::any::TypeId::of::<DiskEventSubscription>(),
                 cosmic::iced::stream::channel(4, move |mut c| async move {
-
-                    let manager = match DiskManager::new().await
-                    {
+                    let manager = match DiskManager::new().await {
                         Ok(m) => m,
                         Err(e) => {
                             println!("Error creating DiskManager: {}", e);
@@ -355,22 +349,16 @@ impl Application for AppModel {
 
                     while let Some(event) = stream.next().await {
                         match event {
-                            cosmos_dbus::disks::DeviceEvent::Added(s) =>
-                            {
+                            cosmos_dbus::disks::DeviceEvent::Added(s) => {
                                 let _ = c.send(Message::DriveAdded(s)).await;
-                            },
-                            cosmos_dbus::disks::DeviceEvent::Removed(s) =>
-                            {
+                            }
+                            cosmos_dbus::disks::DeviceEvent::Removed(s) => {
                                 let _ = c.send(Message::DriveRemoved(s)).await;
-
-                            },
+                            }
                         }
-
                     }
-
                 }),
             ),
-           
             // Watch for application configuration changes.
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
@@ -381,7 +369,6 @@ impl Application for AppModel {
 
                     Message::UpdateConfig(update.config)
                 }),
-            
         ])
     }
 
@@ -418,127 +405,116 @@ impl Application for AppModel {
             },
             Message::VolumesMessage(volumes_control_message) => {
                 let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
-                volumes_control.update(volumes_control_message);
+                return volumes_control.update(volumes_control_message);
             }
             Message::DriveRemoved(_drive_model) => {
-    
-                   //TODO: use DeviceManager.apply_change()
-                   let selected = match self.nav.active_data::<DriveModel>()
-                   {
-                    Some(d) => Some(d.block_path.clone()),
-                    None => None,
+                //TODO: use DeviceManager.apply_change()
+                
+                return Task::perform(
+                    async {
+                        match DriveModel::get_drives().await {
+                            Ok(drives) => Some(drives),
+                            Err(e) => {
+                                println!("Error: {}", e);
+                                return None;
+                            }
+                        }
+                    },
+                    move |drives| match drives {
+                        None => return Message::None.into(),
+                        Some(drives) => return Message::UpdateNav(drives, None).into(),
+                    },
+                );
+            }
+            Message::DriveAdded(_drive_model) => {
+                //TODO: use DeviceManager.apply_change()
+                
+                return Task::perform(
+                    async {
+                        match DriveModel::get_drives().await {
+                            Ok(drives) => Some(drives),
+                            Err(e) => {
+                                println!("Error: {}", e);
+                                return None;
+                            }
+                        }
+                    },
+                    move |drives| match drives {
+                        None => return Message::None.into(),
+                        Some(drives) => return Message::UpdateNav(drives, None).into(),
+                    },
+                );
+            }
+            Message::None => {}
+            Message::UpdateNav(drive_models, selected) => {
+
+                let selected = match selected
+                {
+                    Some(s) => Some(s),
+                    None => match self.nav.active_data::<DriveModel>() {
+                        Some(d) => Some(d.block_path.clone()),
+                        None => None,
+                    }
+                };
+
+
+                self.nav.clear();
+
+
+                let selected = match selected {
+                    Some(s) => Some(s),
+                    None => {
+
+                        if selected.is_none() && drive_models.len() > 0
+                        {
+                            Some(drive_models.first().unwrap().block_path.clone())
+                        }
+                        else {
+                            None
+                        }
+                    }
+                };
+
+                for drive in drive_models {
+                    let icon = match drive.removable {
+                        true => "drive-removable-media-symbolic",
+                        false => "disks-symbolic",
                     };
 
-                   let mut nav = nav_bar::Model::default();
-                   tokio::runtime::Builder::new_current_thread()
-                   .enable_all()
-                   .build()
-                   .unwrap()
-                   .block_on(async {
-                       let drives = match DriveModel::get_drives().await {
-                           Ok(drives) => drives,
-                           Err(e) => {
-                               println!("Error: {}", e);
-                               return;
-                           },
-                       };
-       
-                       for drive in drives {
-                           let icon = match drive.removable {
-                               true => "drive-removable-media-symbolic",
-                               false => "disks-symbolic",
-                           };
-
-                           match selected {
-                            Some(ref s) =>{
-                                if drive.block_path == s.clone(){
-                                    nav.insert()
-                               .text(drive.pretty_name())
-                               .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                               .data::<DriveModel>(drive)
-                               .icon(icon::from_name(icon))
-                               .activate();
-                                }
-                                else {
-                                    nav.insert()
-                               .text(drive.pretty_name())
-                               .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                               .data::<DriveModel>(drive)
-                               .icon(icon::from_name(icon));
-                                }
-                            },
-                            None => {nav.insert()
-                                .text(drive.pretty_name())
-                                .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                                .data::<DriveModel>(drive)
-                                .icon(icon::from_name(icon));},
+                    match selected {
+                        Some(ref s) => {
+                            if drive.block_path == s.clone() {
+                               self.nav.insert()
+                                    .text(drive.pretty_name())
+                                    .data::<VolumesControl>(VolumesControl::new(
+                                        drive.clone(),
+                                    ))
+                                    .data::<DriveModel>(drive)
+                                    .icon(icon::from_name(icon))
+                                    .activate();
+                            } else {
+                                self.nav.insert()
+                                    .text(drive.pretty_name())
+                                    .data::<VolumesControl>(VolumesControl::new(
+                                        drive.clone(),
+                                    ))
+                                    .data::<DriveModel>(drive)
+                                    .icon(icon::from_name(icon));
                             }
-                       }
-                   });
-   
-                   self.nav = nav;
+                        }
+                        None => {
+                            self.nav.insert()
+                            .text(drive.pretty_name())
+                            .data::<VolumesControl>(VolumesControl::new(
+                                drive.clone(),
+                            ))
+                            .data::<DriveModel>(drive)
+                            .icon(icon::from_name(icon));
+                        }
+                    }
+                }
 
-            },
-            Message::DriveAdded(_drive_model) => 
-            {
-                   //TODO: use DeviceManager.apply_change()
-                   let selected = match self.nav.active_data::<DriveModel>()
-                   {
-                    Some(d) => Some(d.block_path.clone()),
-                    None => None,
-                    };
-
-                   let mut nav = nav_bar::Model::default();
-                   tokio::runtime::Builder::new_current_thread()
-                   .enable_all()
-                   .build()
-                   .unwrap()
-                   .block_on(async {
-                       let drives = match DriveModel::get_drives().await {
-                           Ok(drives) => drives,
-                           Err(e) => {
-                               println!("Error: {}", e);
-                               return;
-                           },
-                       };
-       
-                       for drive in drives {
-                           let icon = match drive.removable {
-                               true => "drive-removable-media-symbolic",
-                               false => "disks-symbolic",
-                           };
-
-                           match selected {
-                            Some(ref s) =>{
-                                if drive.block_path == s.clone(){
-                                    nav.insert()
-                               .text(drive.pretty_name())
-                               .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                               .data::<DriveModel>(drive)
-                               .icon(icon::from_name(icon))
-                               .activate();
-                                }
-                                else {
-                                    nav.insert()
-                               .text(drive.pretty_name())
-                               .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                               .data::<DriveModel>(drive)
-                               .icon(icon::from_name(icon));
-                                }
-                            },
-                            None => {nav.insert()
-                                .text(drive.pretty_name())
-                                .data::<VolumesControl>(VolumesControl::new(drive.clone()))
-                                .data::<DriveModel>(drive)
-                                .icon(icon::from_name(icon));},
-                            }
-                       }
-                   });
-   
-                   self.nav = nav;
-
-                   
-            },
+            }
         }
         Task::none()
     }
