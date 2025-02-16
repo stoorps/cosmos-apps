@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::config::Config;
-use crate::fl;
-use crate::utils::{VolumesControl, VolumesControlMessage};
+use crate::{dialogs, fl};
+use crate::utils::{CreateMessage, CreatePartitionInfo, Segment, VolumesControl, VolumesControlMessage};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
@@ -13,8 +13,8 @@ use cosmic::widget::{self, container, icon, menu, nav_bar, Space};
 use cosmic::{
     cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element, Theme,
 };
-use cosmos_common::{bytes_to_pretty, labelled_info};
-use cosmos_dbus::disks::{DiskManager, DriveModel};
+use cosmos_common::{bytes_to_pretty, labelled_info, link_info};
+use cosmos_dbus::disks::{DiskManager, DriveModel, PartitionModel};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -36,13 +36,21 @@ pub struct AppModel {
     // Configuration data that persists between application runs.
     config: Config,
 
-    status: Option<String>,
+    pub dialog: Option<ShowDialog>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowDialog
+{
+    DeletePartition(String),
+    AddPartition(CreatePartitionInfo),
 }
 
 /// Messages emitted by the application and its widgets.
 #[derive(Debug, Clone)]
 pub enum Message {
     OpenRepositoryUrl,
+    OpenPath(String),
     ToggleContextPage(ContextPage),
     UpdateConfig(Config),
     LaunchUrl(String),
@@ -51,6 +59,8 @@ pub enum Message {
     DriveAdded(String),
     None,
     UpdateNav(Vec<DriveModel>, Option<String>),
+    Dialog(ShowDialog),
+    CloseDialog,
 }
 
 /// Create a COSMIC application from the app model
@@ -82,7 +92,7 @@ impl Application for AppModel {
             core,
             context_page: ContextPage::default(),
             nav: nav_bar::Model::default(),
-            status: None,
+            dialog: None,
             key_binds: HashMap::new(),
             // Optional configuration file for an application.
             config: cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
@@ -165,17 +175,18 @@ impl Application for AppModel {
     }
 
     fn dialog(&self) -> Option<Element<Self::Message>> {
-        match self.status {
-            Some(ref s) => Some(
-                container(
-                    container(text(s.clone()))
-                        .class(cosmic::theme::Container::Card)
-                        .padding(20),
-                )
-                .padding(40)
-                .align_bottom(Length::Fill)
-                .into(),
-            ),
+    
+        match self.dialog {
+            Some(ref d) => match d {
+                ShowDialog::DeletePartition(name) => Some(dialogs::confirmation(
+                    format!("Delete {}",name),
+                     format!("Are you sure you wish to delete {}?",name),
+                      VolumesControlMessage::Delete.into(),Some(Message::CloseDialog))),
+                
+                ShowDialog::AddPartition(create) => {
+                        Some(dialogs::add_partition(create.clone()))
+                }
+            }
             None => None,
         }
     }
@@ -200,6 +211,7 @@ impl Application for AppModel {
         .width(cosmic::iced::Length::Shrink)
         .height(cosmic::iced::Length::Shrink);
 
+    
         if !self.core().is_condensed() {
             nav = nav.max_width(280);
         }
@@ -257,19 +269,22 @@ impl Application for AppModel {
                             name = format!("Partition {}: {}", &p.number, name);
                         }
 
+                        let mut type_str = p.id_type.clone().to_uppercase();
+                        type_str = format!("{} - {}",type_str, p.partition_type.clone());
+
                         match &p.usage {
                             Some(usage) => iced_widget::column![
                                 heading(name),
                                 Space::new(0, 10),
                                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
                                 labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
-                                labelled_info("Mounted at", &usage.mount_point),
-                                labelled_info("Contents", &p.partition_type),
+                                link_info("Mounted at", &usage.mount_point, Message::OpenPath(usage.mount_point.clone())),
+                                labelled_info("Contents", &type_str),
                                 labelled_info("Device", match p.device_path
-                            {
-                                Some(s) => {s},
-                                None => "Unresolved".into()
-                            }),
+                                {
+                                    Some(s) => {s},
+                                    None => "Unresolved".into()
+                                }),
                                 labelled_info("UUID", &p.uuid),
                             ]
                             .spacing(5),
@@ -278,7 +293,7 @@ impl Application for AppModel {
                                 heading(name),
                                 Space::new(0, 10),
                                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
-                                labelled_info("Contents", &p.partition_type),
+                                labelled_info("Contents", &type_str),
                                 labelled_info("Device", match p.device_path
                                 {
                                     Some(s) => {s},
@@ -298,6 +313,11 @@ impl Application for AppModel {
                     }
                 };
 
+                let partition_type = match &drive.partition_table_type
+                {
+                    Some(t) => t.clone().to_uppercase(),
+                    None => "Unknown".into(),
+                };
                 iced_widget::column![
                     iced_widget::column![
                         heading(drive.pretty_name()),
@@ -305,6 +325,7 @@ impl Application for AppModel {
                         labelled_info("Model", &drive.model),
                         labelled_info("Serial", &drive.serial),
                         labelled_info("Size", bytes_to_pretty(&drive.size, true)),
+                        labelled_info("Partitioning", &partition_type),
                     ]
                     .spacing(5)
                     .width(Length::Fill),
@@ -380,6 +401,10 @@ impl Application for AppModel {
         match message {
             Message::OpenRepositoryUrl => {
                 _ = open::that_detached(REPOSITORY);
+            },
+            Message::OpenPath(path) =>
+            {
+                _= open::that_detached(path);
             }
 
             Message::ToggleContextPage(context_page) => {
@@ -403,9 +428,10 @@ impl Application for AppModel {
                     eprintln!("failed to open {url:?}: {err}");
                 }
             },
-            Message::VolumesMessage(volumes_control_message) => {
+            Message::VolumesMessage(message) => {
                 let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
-                return volumes_control.update(volumes_control_message);
+                return volumes_control.update(message, &mut self.dialog);
+               
             }
             Message::DriveRemoved(_drive_model) => {
                 //TODO: use DeviceManager.apply_change()
@@ -515,6 +541,12 @@ impl Application for AppModel {
                 }
 
             }
+            Message::Dialog(show_dialog) => {
+                self.dialog = Some(show_dialog)
+            },
+            Message::CloseDialog => {
+                self.dialog = None;
+            },
         }
         Task::none()
     }
@@ -522,8 +554,14 @@ impl Application for AppModel {
     /// Called when a nav item is selected.
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
         // Activate the page in the model.
-        self.nav.activate(id);
-        self.update_title()
+        if self.dialog.is_none()
+        {
+            self.nav.activate(id);
+            self.update_title()
+        }
+        else {
+            Task::none()
+        }
     }
 }
 

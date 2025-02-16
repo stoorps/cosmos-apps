@@ -5,8 +5,7 @@ use serde::Deserialize;
 use tracing::{info, warn, error};
 use udisks2::{block::BlockProxy, drive::DriveProxy, partition::PartitionProxy, partitiontable::PartitionTableProxy, Client};
 use zbus::{
-    zvariant::{self, OwnedObjectPath, Value},
-    Connection,
+    conn, zvariant::{self, OwnedObjectPath, Value}, Connection
 };
 use zbus_macros::proxy;
 
@@ -32,6 +31,7 @@ pub struct DriveModel {
     pub block_path: String,
     pub partitions: Vec<PartitionModel>,
     pub path: String,
+    pub partition_table_type: Option<String>
 }
 
 
@@ -69,6 +69,7 @@ impl DriveModel {
             optical_blank: drive_proxy.optical_blank().await?,
             removable: drive_proxy.removable().await?,
             revision: drive_proxy.revision().await?,
+            partition_table_type: None,
         })
     }
 
@@ -134,9 +135,12 @@ impl DriveModel {
                     Ok(p) => p,
                     Err(e) => {
                         error!("Error getting partition table: {}", e);
+                        drives.insert(drive.name.clone(), drive);
                         continue;
                     }
                 };
+
+            drive.partition_table_type = Some(partition_table_proxy.type_().await?);
 
             let partition_paths = match partition_table_proxy.partitions().await {
                 Ok(p) => p,
@@ -166,8 +170,10 @@ impl DriveModel {
                     None => None,
                 };
 
+                let block_proxy = BlockProxy::builder(&connection).path(&partition_path)?.build().await?;
 
-                drive.partitions.push(PartitionModel::from_proxy(&client, partition_path.clone(), usage, partition_proxy).await?);
+
+                drive.partitions.push(PartitionModel::from_proxy(&client, partition_path.clone(), usage, &partition_proxy, &block_proxy).await?);
             }
 
 

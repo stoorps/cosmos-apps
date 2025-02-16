@@ -1,5 +1,11 @@
 use cosmic::{
-    cosmic_theme::Spacing, iced::{self, Alignment, Background, Border, Color, Length, Shadow}, iced_widget, widget::{self}, Element, Theme
+    app::message::cosmic,
+    cosmic_theme::Spacing,
+    iced::{self, Alignment, Background, Border, Color, Length, Shadow},
+    iced_wgpu::graphics::text::cosmic_text::ttf_parser::Width,
+    iced_widget,
+    widget::{self, button, container},
+    Element, Theme,
 };
 
 pub fn labelled_info<'a, Message: 'static + Clone>(
@@ -10,8 +16,30 @@ pub fn labelled_info<'a, Message: 'static + Clone>(
         widget::text(label.into())
             .align_x(Alignment::End)
             .width(Length::FillPortion(1)),
-           // .class(theme::Text::Color(cosmic::theme::system_preference().cosmic().text_button.base.color.into())),
+        // .class(theme::Text::Color(cosmic::theme::system_preference().cosmic().text_button.base.color.into())),
         widget::text(info.into()).width(Length::FillPortion(3)),
+    ]
+    .spacing(Spacing::default().space_s)
+    .into()
+}
+
+pub fn link_info<'a, Message: 'static + Clone>(
+    label: impl Into<String>,
+    info: impl Into<String>,
+    message: Message,
+) -> Element<'a, Message> {
+    iced_widget::row![
+        widget::text(label.into())
+            .align_x(Alignment::End)
+            .width(Length::FillPortion(1)),
+        // .class(theme::Text::Color(cosmic::theme::system_preference().cosmic().text_button.base.color.into())),
+        container(
+            cosmic::widget::button::link(info.into())
+                .width(Length::Shrink)
+                .padding(0)
+                .on_press(message)
+        )
+        .width(Length::FillPortion(3)),
     ]
     .spacing(Spacing::default().space_s)
     .into()

@@ -1,13 +1,13 @@
-use std::{collections::HashMap, path::Path};
+use std::{any::Any, collections::HashMap, path::Path};
 use enumflags2::{bitflags, BitFlags};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use udisks2::{filesystem::FilesystemProxy, partition::{PartitionFlags, PartitionProxy}, Client};
+use udisks2::{block::BlockProxy, filesystem::FilesystemProxy, partition::{PartitionFlags, PartitionProxy}, Client};
 use zbus::{
     zvariant::{OwnedObjectPath, Type}, Connection}
 ;
 use zbus_macros::proxy;
-use super::{ DiskError, Usage};
+use super::{ partition_type::PartitionTypeInfo, DiskError, Usage};
 
 
 #[derive(Debug, Clone)]
@@ -17,6 +17,7 @@ pub struct PartitionModel {
     pub table_path: OwnedObjectPath,
     pub name: String,
     pub partition_type: String,
+    pub id_type: String,
     pub uuid: String,
     pub number: u32,
     pub flags: BitFlags<PartitionFlags>,
@@ -31,35 +32,55 @@ pub struct PartitionModel {
 
 impl PartitionModel {
     pub fn pretty_name(&self) -> String {
-        let mut name = self.name.clone();
-        if name.len() == 0 {
-            name = format!("Partition {}", &self.number);
-        } else {
-            name = format!("Partition {}: {}", &self.number, name);
-        }
+        // let mut name = self.name.clone();
+        // if name.len() == 0 {
+        //     name = format!("Partition {}", &self.number);
+        // } else {
+        //     name = format!("Partition {}: {}", &self.number, name);
+        // }
 
-        name
+        // name
+        format!("Partition {}", &self.number)
     }
 
-    pub(crate) async fn from_proxy(client: &Client, partition_path: OwnedObjectPath, usage: Option<Usage>, partition_proxy: PartitionProxy<'_>) -> Result<Self>
+    pub(crate) async fn from_proxy(client: &Client, partition_path: OwnedObjectPath, usage: Option<Usage>, 
+        partition_proxy: &PartitionProxy<'_>, block_proxy: &BlockProxy<'_>) -> Result<Self>
     {
-    
-        let proposed = &format!("/dev/{}", partition_path.split("/").last().unwrap());
-
-        let device_path = match Path::new(proposed).exists()
+        let device_path = match &usage
         {
-            true => Some(proposed.to_owned()),
+            Some(usage) => Some(usage.filesystem.clone()),
+            None =>
+            {
+                let proposed = format!("/dev/{}", partition_path.split("/").last().unwrap());
 
-            //TODO: Figure out how to SOLIDLY resolve a device's "natural" path.
-            false => None,
+                match Path::new(&proposed).exists() {
+                    true => Some(proposed),
+                    false => None,
+                }
+
+            } 
         };
+
+
+
+        let table_proxy = client.partition_table(&partition_proxy).await?;
+        let type_str = match client
+        .partition_type_for_display(&table_proxy.type_().await?, &partition_proxy.type_().await?)
+    {
+        Some(val) => val.to_owned().replace("part-type", "").replace("\u{004}", ""),
+        _ => partition_proxy.type_().await?,
+    };
+
+
+
 
      Ok(Self {
             is_contained: partition_proxy.is_contained().await?,
             is_container: partition_proxy.is_container().await?,
             table_path: partition_proxy.table().await?,
             name: partition_proxy.name().await?,
-            partition_type: client.partition_info(&partition_proxy).await?, // Use type_()
+            partition_type: type_str,
+            id_type: block_proxy.id_type().await?,
             uuid: partition_proxy.uuid().await?,
             number: partition_proxy.number().await?,
             flags: partition_proxy.flags().await?,
@@ -271,6 +292,35 @@ impl PartitionModel {
     }
 
 
+    
+        /// Returns informating about the given partition that is suitable for presentation in an user
+    /// interface in a single line of text.
+    ///
+    /// The returned string is localized and includes things like the partition type, flags (if
+    /// any) and name (if any).
+    ///
+    /// # Errors
+    /// Returns an errors if it fails to read any of the aforementioned information.
+    async fn partition_info(
+        client: &Client,
+        partition: &PartitionProxy<'_>,
+    ) -> Result<String> {
+        let flags = partition.flags().await?;
+        let table = client.partition_table(partition).await?;
+        let mut flags_str = String::new();
+
+        let type_str = match client
+            .partition_type_for_display(&table.type_().await?, &partition.type_().await?)
+        {
+            Some(val) => val.to_owned(),
+            _ => partition.type_().await?,
+        };
+
+
+        println!("{type_str}");
+
+        Ok(type_str)
+    }
 
 
 }

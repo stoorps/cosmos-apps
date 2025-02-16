@@ -1,23 +1,19 @@
+use std::any::Any;
+
 use cosmic::{
     cosmic_theme::palette::WithAlpha,
-    iced::{
-        Alignment, Background, Length,
-        Shadow,
-    },
-    iced_widget::{
-        self,
-        column, row,
-    },
+    iced::{Alignment, Background, Length, Shadow},
+    iced_widget::{self, column, row},
     widget::{
-        self,
-        container, icon,
+        self, container, icon,
         text::{caption, caption_heading},
-    }, Element, Task,
+    },
+    Element, Task,
 };
 use cosmos_common::bytes_to_pretty;
 use cosmos_dbus::disks::{DriveModel, PartitionModel};
 
-use crate::app::Message;
+use crate::app::{AppModel, Message, ShowDialog};
 
 #[derive(Debug, Clone)]
 pub enum VolumesControlMessage {
@@ -25,11 +21,39 @@ pub enum VolumesControlMessage {
     Add,
     Mount,
     Unmount,
-        Delete,
-
+    Delete,
+    CreateMessage(CreateMessage)
 }
 
-impl Into<Message> for VolumesControlMessage{
+#[derive(Debug, Clone)]
+pub enum CreateMessage
+{
+    SizeUpdate(u64),
+    NameUpdate(String),
+    PasswordUpdate(String),
+    ConfirmedPasswordUpdate(String),
+    PasswordProectedUpdate(bool),
+    EraseUpdate(bool),
+    PartitionTypeUpdate(usize),
+    Continue,
+    Cancel
+}
+
+impl Into<VolumesControlMessage> for CreateMessage
+{
+    fn into(self) -> VolumesControlMessage {
+        VolumesControlMessage::CreateMessage(self)
+    }
+}
+
+impl Into<Message> for CreateMessage
+{
+    fn into(self) -> Message {
+        Message::VolumesMessage(VolumesControlMessage::CreateMessage(self))
+    }
+}
+
+impl Into<Message> for VolumesControlMessage {
     fn into(self) -> Message {
         Message::VolumesMessage(self)
     }
@@ -42,18 +66,35 @@ pub struct VolumesControl {
     pub model: DriveModel,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Segment {
     pub label: String,
     pub name: String,
     pub partition_type: String,
     pub size: u64,
-    #[allow(dead_code)]
     pub offset: u64,
     pub state: bool,
     pub is_free_space: bool,
     pub width: u16,
     pub partition: Option<PartitionModel>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CreatePartitionInfo
+{
+    pub name: String,
+    pub size: u64,
+    pub max_size: u64,
+    pub offset: u64,
+    pub erase: bool,
+    pub selected_type: String, 
+    pub partition_uuid: String,
+    pub selected_partitition_type: usize,
+    pub password_protected: bool,
+    pub password: String,
+    pub confirmed_password: String,
+    pub can_continue: bool,
+
 }
 
 #[derive(Copy, Clone)]
@@ -87,14 +128,32 @@ impl Segment {
             is_free_space: true,
             width: 0,
             partition: None,
+            
+        }
+    }
+
+    pub fn get_create_info(&self) -> CreatePartitionInfo
+    {
+        CreatePartitionInfo{
+            max_size: self.size,
+            offset: self.offset,
+            ..Default::default()
         }
     }
 
     pub fn new(partition: &PartitionModel) -> Self {
+        let mut name = partition.name.clone();
+        if name.len() < 1 {
+            name = "Filesystem".into();
+        }
+
+        let mut type_str = partition.id_type.clone().to_uppercase();
+        type_str = format!("{} - {}", type_str, partition.partition_type.clone());
+
         Self {
-            label: "LABEL WILL GO HERE".into(),
+            label: name,
             name: partition.pretty_name(),
-            partition_type: partition.partition_type.clone(),
+            partition_type: type_str,
             size: partition.size,
             offset: partition.offset,
             state: false,
@@ -160,6 +219,7 @@ impl Segment {
                     caption(bytes_to_pretty(&self.size, false)).center()
                 ]
                 .spacing(5)
+                .width(Length::Fill)
                 .align_x(Alignment::Center),
             )
             .padding(5)
@@ -170,7 +230,7 @@ impl Segment {
             container(
                 iced_widget::column![
                     caption_heading(self.name.clone()).center(),
-                    caption("LABEL WILL GO HERE").center(),
+                    caption(self.label.clone()).center(),
                     caption(self.partition_type.clone()).center(),
                     caption(bytes_to_pretty(&self.size, false)).center()
                 ]
@@ -185,7 +245,6 @@ impl Segment {
     }
 }
 
-
 impl VolumesControl {
     pub fn new(model: DriveModel) -> Self {
         let mut segments: Vec<Segment> = Segment::get_segments(&model);
@@ -198,133 +257,146 @@ impl VolumesControl {
         }
     }
 
-    pub fn update(&mut self, message: VolumesControlMessage) -> Task<cosmic::app::Message<Message>> {
-        let partition_model = match self.segments.get(self.selected_segment)
-        {
-            Some(s) => &s.partition,
-            None => &None,
-        };
+    pub fn update(
+        &mut self,
+        message: VolumesControlMessage,
+        dialog: &mut Option<ShowDialog>
+    ) -> Task<cosmic::app::Message<Message>> {
 
-
-
-        match message {
-            VolumesControlMessage::SegmentSelected(index) => {
+    match message {
+        VolumesControlMessage::SegmentSelected(index) => {
+            if dialog.is_none()
+            {
                 self.selected_segment = index;
                 self.segments.iter_mut().for_each(|s| s.state = false);
                 self.segments.get_mut(index).unwrap().state = true;
             }
-            VolumesControlMessage::Add => {
-              
-            },
-            VolumesControlMessage::Mount => {
-                let segment = self.segments.get(self.selected_segment.clone()).cloned();
-                match segment.clone()
-                {
-                    Some(s) =>
-                    {
-                        match s.partition
-                        {
-                            Some(p) => {
-                                return Task::perform( async move {
-                                    match p.mount().await
-                                    {
-                                       Ok(_) =>  match DriveModel::get_drives().await
-                                        {
-                                            Ok(drives) => Ok(drives),
-                                            Err(e) => Err(e),
-                                        }
-                                        Err(e) => Err(e),
-                                        
-                                    }
-                                  
-                                   
-                                }, |result| match result {
-                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                                    Err(e) => {println!("{e}"); Message::None.into()},
-                                });
-                            },
-                            None => return Task::none(),
-                        }
-                    },
-                    None => {}
-                }
-                return Task::none();
-            },
-            VolumesControlMessage::Unmount => {
-                let segment = self.segments.get(self.selected_segment.clone()).cloned();
-                match segment.clone()
-                {
-                    Some(s) =>
-                    {
-                        match s.partition
-                        {
-                            Some(p) => {
-                                return Task::perform( async move {
-                                    match p.unmount().await
-                                    {
-                                       Ok(_) =>  match DriveModel::get_drives().await
-                                        {
-                                            Ok(drives) => Ok(drives),
-                                            Err(e) => Err(e),
-                                        }
-                                        Err(e) => Err(e),
-                                        
-                                    }
-                                  
-                                   
-                                }, |result| match result {
-                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                                    Err(e) => {println!("{e}"); Message::None.into()},
-                                });
-                            },
-                            None => return Task::none(),
-                        }
-                    },
-                    None => {}
-                }
-                return Task::none();
-
-            },
-            VolumesControlMessage::Delete => {
-                let segment = self.segments.get(self.selected_segment.clone()).cloned();
-                match segment.clone()
-                {
-                    Some(s) =>
-                    {
-                        match s.partition
-                        {
-                            Some(p) => {
-                                return Task::perform( async move {
-                                    match p.delete().await
-                                    {
-                                       Ok(_) =>  match DriveModel::get_drives().await
-                                        {
-                                            Ok(drives) => Ok(drives),
-                                            Err(e) => Err(e),
-                                        }
-                                        Err(e) => Err(e),
-                                        
-                                    }
-                                  
-                                   
-                                }, |result| match result {
-                                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                                    Err(e) => {println!("{e}"); Message::None.into()},
-                                });
-                            },
-                            None => return Task::none(),
-                        }
-                    },
-                    None => {}
-                }
-                return Task::none();
-            },
         }
+        VolumesControlMessage::Add => {}
+        VolumesControlMessage::Mount => {
+            let segment = self.segments.get(self.selected_segment.clone()).cloned();
+            match segment.clone() {
+                Some(s) => match s.partition {
+                    Some(p) => {
+                        return Task::perform(
+                            async move {
+                                match p.mount().await {
+                                    Ok(_) => match DriveModel::get_drives().await {
+                                        Ok(drives) => Ok(drives),
+                                        Err(e) => Err(e),
+                                    },
+                                    Err(e) => Err(e),
+                                }
+                            },
+                            |result| match result {
+                                Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                Err(e) => {
+                                    println!("{e}");
+                                    Message::None.into()
+                                }
+                            },
+                        );
+                    }
+                    None => return Task::none(),
+                },
+                None => {}
+            }
+            return Task::none();
+        }
+        VolumesControlMessage::Unmount => {
+            let segment = self.segments.get(self.selected_segment.clone()).cloned();
+            match segment.clone() {
+                Some(s) => match s.partition {
+                    Some(p) => {
+                        return Task::perform(
+                            async move {
+                                match p.unmount().await {
+                                    Ok(_) => match DriveModel::get_drives().await {
+                                        Ok(drives) => Ok(drives),
+                                        Err(e) => Err(e),
+                                    },
+                                    Err(e) => Err(e),
+                                }
+                            },
+                            |result| match result {
+                                Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                Err(e) => {
+                                    println!("{e}");
+                                    Message::None.into()
+                                }
+                            },
+                        );
+                    }
+                    None => return Task::none(),
+                },
+                None => {}
+            }
+            return Task::none();
+        }
+        VolumesControlMessage::Delete => {
+            let segment = self.segments.get(self.selected_segment.clone()).cloned();
+            let task = match segment.clone() {
+                Some(s) => match s.partition {
+                    Some(p) => Task::perform(
+                        async move {
+                            match p.delete().await {
+                                Ok(_) => match DriveModel::get_drives().await {
+                                    Ok(drives) => Ok(drives),
+                                    Err(e) => Err(e),
+                                },
+                                Err(e) => Err(e),
+                            }
+                        },
+                        |result| match result {
+                            Ok(drives) => Message::UpdateNav(drives, None).into(),
+                            Err(e) => {
+                                println!("{e}");
+                                Message::None.into()
+                            }
+                        },
+                    ),
+                    None => Task::none(),
+                },
+                None => Task::none(),
+            };
+
+            return Task::done(Message::CloseDialog.into()).chain(task);
+        }
+        VolumesControlMessage::CreateMessage(create_message) => {
+                
+            let d = match dialog.as_mut()
+            {
+                Some(d) => d,
+                None => panic!("invalid state") //TODO: Better handling,
+            };
+
+            match d{
+                ShowDialog::DeletePartition(_) => {},
+
+                ShowDialog::AddPartition(create) =>
+                {
+                    match create_message {
+                        CreateMessage::SizeUpdate(size) => create.size = size,
+                        CreateMessage::NameUpdate(name) =>{
+                            create.name = name;
+                        },
+                        CreateMessage::PasswordUpdate(password) => create.password = password,
+                        CreateMessage::ConfirmedPasswordUpdate(confirmed_password) => create.confirmed_password = confirmed_password,
+                        CreateMessage::PasswordProectedUpdate(protect) => create.password_protected = protect,
+                        CreateMessage::EraseUpdate(erase) => create.erase = erase,
+                        CreateMessage::PartitionTypeUpdate(p_type) => create.selected_partitition_type = p_type,
+                        CreateMessage::Continue => todo!(),
+                        CreateMessage::Cancel => todo!(),
+                    }
+                }
+            }
+        }
+    }
         Task::none()
     }
 
-    pub fn view<'a>(&self) -> Element<'a, Message> {
-        let segment_buttons: Vec<Element<'a, Message>> = self
+    pub fn view(&self) -> Element<Message> {
+        let segment_buttons: Vec<Element<Message>> = self
             .segments
             .iter()
             .enumerate()
@@ -348,8 +420,11 @@ impl VolumesControl {
             })
             .collect();
 
-        let selected = self.segments.get(self.selected_segment).unwrap(); //TODO: Handle unwrap
-        let action_button = match &selected.partition {
+        let selected = self.segments.get(self.selected_segment).cloned().unwrap(); // Handle unwrap
+        
+        let mut action_bar: Vec<Element<Message>> = vec![];
+
+        action_bar.push(match selected.partition {
             Some(p) => {
                 match p.usage //TODO: More solid check than using the output of df to see if mounted.
             {
@@ -357,21 +432,29 @@ impl VolumesControl {
                 None =>widget::button::custom(icon::from_name( "media-playback-start-symbolic")).on_press(VolumesControlMessage::Mount.into()),
             }
             }
-            None =>widget::button::custom(icon::from_name( "list-add-symbolic")).on_press(VolumesControlMessage::Mount.into()),
+            None =>widget::button::custom(icon::from_name( "list-add-symbolic")).on_press(Message::Dialog(ShowDialog::AddPartition(selected.get_create_info())).into()),
+ 
+        }.into());
 
-        };
+        //TODO Get better icons
+        if !selected.is_free_space {
+            action_bar.push(widget::button::custom(icon::from_name("edit-find-symbolic")).into());
+            action_bar.push(widget::horizontal_space().into());
+            action_bar.push(
+                widget::button::custom(icon::from_name("edit-delete-symbolic"))
+                    .on_press(
+                        Message::Dialog(ShowDialog::DeletePartition(selected.name.clone())).into(),
+                    )
+                    .into(),
+            );
+        }
 
         container(
             column![
                 cosmic::widget::Row::from_vec(segment_buttons)
                     .spacing(10)
                     .width(Length::Fill),
-                row![
-                    action_button,
-                    widget::button::custom(icon::from_name("edit-find-symbolic")),
-                    widget::horizontal_space(),
-                    widget::button::custom(icon::from_name("edit-delete-symbolic")).on_press(VolumesControlMessage::Delete.into()),
-                ] //TODO: Get better icons
+                widget::Row::from_vec(action_bar).width(Length::Fill)
             ]
             .spacing(10),
         )
@@ -388,7 +471,9 @@ fn get_button_style(
 ) -> cosmic::widget::button::Style {
     let mut base = cosmic::widget::button::Style {
         shadow_offset: Shadow::default().offset,
-        background: Some(cosmic::iced::Background::Color(theme.cosmic().primary.base.into())),// Some(cosmic::iced::Background::Color(Color::TRANSPARENT)),
+        background: Some(cosmic::iced::Background::Color(
+            theme.cosmic().primary.base.into(),
+        )), // Some(cosmic::iced::Background::Color(Color::TRANSPARENT)),
         overlay: None,
         border_radius: (theme.cosmic().corner_radii.radius_xs).into(),
         border_width: 0.,

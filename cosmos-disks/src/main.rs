@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod i18n;
 mod utils;
+mod dialogs;
 
 //#[tokio::main]
 fn main() -> cosmic::iced::Result {
