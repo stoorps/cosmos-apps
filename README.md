@@ -1,5 +1,5 @@
 # cosmos-apps
-A mono repo containing my current cosmic-app projects!
+A monorepo containing my current cosmic app projects
 
 ## cosmos-disks
 At the moment, I'm using usdisks2-rs and zbus as a basis for this application, but have my eye on disks-rs, and may decide to start using it/contributing to it in the near future.
