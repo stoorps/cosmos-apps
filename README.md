@@ -8,7 +8,7 @@ The goal of this project is to hopefully build a tool good enough to be shipped 
 
 If you work over at System76 and would like to chat, hit me up!
 
-![Screenshot of cosmos-disks](http://url/to/img.png)
+![Screenshot of cosmos-disks](https://github.com/stoorps/cosmos-apps/blob/main/screenshots/cosmos-disks.png)
 
 
 ## cosmos-dbus
