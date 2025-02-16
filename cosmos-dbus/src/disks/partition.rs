@@ -1,13 +1,12 @@
-use std::{any::Any, collections::HashMap, path::Path};
+use std::{ collections::HashMap, path::Path};
 use enumflags2::{bitflags, BitFlags};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use udisks2::{block::BlockProxy, filesystem::FilesystemProxy, partition::{PartitionFlags, PartitionProxy}, Client};
 use zbus::{
-    zvariant::{OwnedObjectPath, Type}, Connection}
+    zvariant::OwnedObjectPath, Connection}
 ;
-use zbus_macros::proxy;
-use super::{ partition_type::PartitionTypeInfo, DiskError, Usage};
+
+use super::{ DiskError, Usage};
 
 
 #[derive(Debug, Clone)]
@@ -27,6 +26,7 @@ pub struct PartitionModel {
     pub device_path: Option<String>,
     pub usage: Option<Usage>,
     connection: Option<Connection>,
+    pub drive_path: String,
 
 }
 
@@ -43,7 +43,7 @@ impl PartitionModel {
         format!("Partition {}", &self.number)
     }
 
-    pub(crate) async fn from_proxy(client: &Client, partition_path: OwnedObjectPath, usage: Option<Usage>, 
+    pub(crate) async fn from_proxy(client: &Client, drive_path: String, partition_path: OwnedObjectPath, usage: Option<Usage>, 
         partition_proxy: &PartitionProxy<'_>, block_proxy: &BlockProxy<'_>) -> Result<Self>
     {
         let device_path = match &usage
@@ -90,6 +90,7 @@ impl PartitionModel {
             device_path: device_path,
             usage,
             connection: Some(Connection::system().await?),
+            drive_path: drive_path,
         })
     }
 

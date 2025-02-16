@@ -1,10 +1,8 @@
 use cosmic::{
-    app::message::cosmic,
     cosmic_theme::Spacing,
     iced::{self, Alignment, Background, Border, Color, Length, Shadow},
-    iced_wgpu::graphics::text::cosmic_text::ttf_parser::Width,
     iced_widget,
-    widget::{self, button, container},
+    widget::{self, container},
     Element, Theme,
 };
 

@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::config::Config;
-use crate::{dialogs, fl};
-use crate::utils::{CreateMessage, CreatePartitionInfo, Segment, VolumesControl, VolumesControlMessage};
+use crate::fl;
+use crate::views::about::about;
+use crate::views::dialogs;
+use crate::views::menu::{menu_view, MenuAction};
+use crate::views::volumes::{VolumesControl, VolumesControlMessage};
 use cosmic::app::{context_drawer, Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::{Alignment, Length, Subscription};
-use cosmic::iced_widget::text;
+use cosmic::iced::{Length, Subscription};
 use cosmic::widget::text::heading;
 use cosmic::widget::{self, container, icon, menu, nav_bar, Space};
-use cosmic::{
-    cosmic_theme, iced_widget, theme, Application, ApplicationExt, Apply, Element, Theme,
-};
+use cosmic::{iced_widget, Application, ApplicationExt, Apply, Element};
 use cosmos_common::{bytes_to_pretty, labelled_info, link_info};
-use cosmos_dbus::disks::{DiskManager, DriveModel, PartitionModel};
+use cosmos_dbus::disks::{CreatePartitionInfo, DiskManager, DriveModel};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::time::Duration;
 
-const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
-const APP_ICON: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/icon.svg");
+pub const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+pub const APP_ICON: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/icon.svg");
 
 /// The application model stores app-specific state used to describe its interface and
 /// drive its logic.
@@ -40,8 +40,7 @@ pub struct AppModel {
 }
 
 #[derive(Debug, Clone)]
-pub enum ShowDialog
-{
+pub enum ShowDialog {
     DeletePartition(String),
     AddPartition(CreatePartitionInfo),
 }
@@ -61,6 +60,18 @@ pub enum Message {
     UpdateNav(Vec<DriveModel>, Option<String>),
     Dialog(ShowDialog),
     CloseDialog,
+    Eject,
+    PowerOff,
+    Format,
+    Benchmark,
+    SmartData,
+    DriveSettings,
+    StandbyNow,
+    Wakeup,
+    NewDiskImage,
+    AttachDisk,
+    CreateDiskFrom,
+    RestoreImageTo,
 }
 
 /// Create a COSMIC application from the app model
@@ -133,60 +144,21 @@ impl Application for AppModel {
 
     /// Elements to pack at the start of the header bar.
     fn header_start(&self) -> Vec<Element<Self::Message>> {
-        let menu_bar = menu::bar(vec![
-            menu::Tree::with_children(
-                menu::root("Image"),
-                menu::items(
-                    &self.key_binds,
-                    vec![
-                        menu::Item::Button("New Disk Image", None, MenuAction::About),
-                        menu::Item::Button("Attach Disk Image", None, MenuAction::About),
-                        menu::Item::Button("Create Disk From Drive", None, MenuAction::About),
-                        menu::Item::Button("Restore Image to Drive", None, MenuAction::About),
-                    ],
-                ),
-            ),
-            menu::Tree::with_children(
-                menu::root("Disk"),
-                menu::items(
-                    &self.key_binds,
-                    vec![
-                        menu::Item::Button("Eject", None, MenuAction::About),
-                        menu::Item::Button("Power Off", None, MenuAction::About),
-                        menu::Item::Button("Format Disk", None, MenuAction::About),
-                        menu::Item::Button("Benchmark Disk", None, MenuAction::About),
-                        menu::Item::Button("SMART Data & Self-Tests", None, MenuAction::About),
-                        menu::Item::Button("Drive Settings", None, MenuAction::About),
-                        menu::Item::Button("Standby Now", None, MenuAction::About),
-                        menu::Item::Button("Wake-up From Standby", None, MenuAction::About),
-                    ],
-                ),
-            ),
-            menu::Tree::with_children(
-                menu::root(fl!("view")),
-                menu::items(
-                    &self.key_binds,
-                    vec![menu::Item::Button(fl!("about"), None, MenuAction::About)],
-                ),
-            ),
-        ]);
-
-        vec![menu_bar.into()] //, horizontal_space().into(), end_bar.into()]
+        menu_view(&self.key_binds)
     }
 
     fn dialog(&self) -> Option<Element<Self::Message>> {
-    
         match self.dialog {
             Some(ref d) => match d {
                 ShowDialog::DeletePartition(name) => Some(dialogs::confirmation(
-                    format!("Delete {}",name),
-                     format!("Are you sure you wish to delete {}?",name),
-                      VolumesControlMessage::Delete.into(),Some(Message::CloseDialog))),
-                
-                ShowDialog::AddPartition(create) => {
-                        Some(dialogs::add_partition(create.clone()))
-                }
-            }
+                    format!("Delete {}", name),
+                    format!("Are you sure you wish to delete {}?", name),
+                    VolumesControlMessage::Delete.into(),
+                    Some(Message::CloseDialog),
+                )),
+
+                ShowDialog::AddPartition(create) => Some(dialogs::add_partition(create.clone())),
+            },
             None => None,
         }
     }
@@ -211,7 +183,6 @@ impl Application for AppModel {
         .width(cosmic::iced::Length::Shrink)
         .height(cosmic::iced::Length::Shrink);
 
-    
         if !self.core().is_condensed() {
             nav = nav.max_width(280);
         }
@@ -232,7 +203,7 @@ impl Application for AppModel {
 
         Some(match self.context_page {
             ContextPage::About => context_drawer::context_drawer(
-                self.about(),
+                about(),
                 Message::ToggleContextPage(ContextPage::About),
             )
             .title(fl!("about")),
@@ -270,7 +241,7 @@ impl Application for AppModel {
                         }
 
                         let mut type_str = p.id_type.clone().to_uppercase();
-                        type_str = format!("{} - {}",type_str, p.partition_type.clone());
+                        type_str = format!("{} - {}", type_str, p.partition_type.clone());
 
                         match &p.usage {
                             Some(usage) => iced_widget::column![
@@ -278,13 +249,21 @@ impl Application for AppModel {
                                 Space::new(0, 10),
                                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
                                 labelled_info("Usage", bytes_to_pretty(&usage.used, false)),
-                                link_info("Mounted at", &usage.mount_point, Message::OpenPath(usage.mount_point.clone())),
+                                link_info(
+                                    "Mounted at",
+                                    &usage.mount_point,
+                                    Message::OpenPath(usage.mount_point.clone())
+                                ),
                                 labelled_info("Contents", &type_str),
-                                labelled_info("Device", match p.device_path
-                                {
-                                    Some(s) => {s},
-                                    None => "Unresolved".into()
-                                }),
+                                labelled_info(
+                                    "Device",
+                                    match p.device_path {
+                                        Some(s) => {
+                                            s
+                                        }
+                                        None => "Unresolved".into(),
+                                    }
+                                ),
                                 labelled_info("UUID", &p.uuid),
                             ]
                             .spacing(5),
@@ -294,27 +273,28 @@ impl Application for AppModel {
                                 Space::new(0, 10),
                                 labelled_info("Size", bytes_to_pretty(&p.size, true)),
                                 labelled_info("Contents", &type_str),
-                                labelled_info("Device", match p.device_path
-                                {
-                                    Some(s) => {s},
-                                    None => "Unresolved".into()
-                                }),
+                                labelled_info(
+                                    "Device",
+                                    match p.device_path {
+                                        Some(s) => {
+                                            s
+                                        }
+                                        None => "Unresolved".into(),
+                                    }
+                                ),
                                 labelled_info("UUID", &p.uuid),
                             ]
                             .spacing(5),
                         }
                     }
-                    None => {
-                        iced_widget::column![
-                            heading(&segment.label),
-                            labelled_info("Size", bytes_to_pretty(&segment.size, true)),
-                        ]
-                        .spacing(5)
-                    }
+                    None => iced_widget::column![
+                        heading(&segment.label),
+                        labelled_info("Size", bytes_to_pretty(&segment.size, true)),
+                    ]
+                    .spacing(5),
                 };
 
-                let partition_type = match &drive.partition_table_type
-                {
+                let partition_type = match &drive.partition_table_type {
                     Some(t) => t.clone().to_uppercase(),
                     None => "Unknown".into(),
                 };
@@ -401,10 +381,9 @@ impl Application for AppModel {
         match message {
             Message::OpenRepositoryUrl => {
                 _ = open::that_detached(REPOSITORY);
-            },
-            Message::OpenPath(path) =>
-            {
-                _= open::that_detached(path);
+            }
+            Message::OpenPath(path) => {
+                _ = open::that_detached(path);
             }
 
             Message::ToggleContextPage(context_page) => {
@@ -431,11 +410,10 @@ impl Application for AppModel {
             Message::VolumesMessage(message) => {
                 let volumes_control = self.nav.active_data_mut::<VolumesControl>().unwrap(); //TODO: HANDLE UNWRAP.
                 return volumes_control.update(message, &mut self.dialog);
-               
             }
             Message::DriveRemoved(_drive_model) => {
                 //TODO: use DeviceManager.apply_change()
-                
+
                 return Task::perform(
                     async {
                         match DriveModel::get_drives().await {
@@ -454,7 +432,7 @@ impl Application for AppModel {
             }
             Message::DriveAdded(_drive_model) => {
                 //TODO: use DeviceManager.apply_change()
-                
+
                 return Task::perform(
                     async {
                         match DriveModel::get_drives().await {
@@ -473,29 +451,22 @@ impl Application for AppModel {
             }
             Message::None => {}
             Message::UpdateNav(drive_models, selected) => {
-
-                let selected = match selected
-                {
+                let selected = match selected {
                     Some(s) => Some(s),
                     None => match self.nav.active_data::<DriveModel>() {
                         Some(d) => Some(d.block_path.clone()),
                         None => None,
-                    }
+                    },
                 };
 
-
                 self.nav.clear();
-
 
                 let selected = match selected {
                     Some(s) => Some(s),
                     None => {
-
-                        if selected.is_none() && drive_models.len() > 0
-                        {
+                        if selected.is_none() && drive_models.len() > 0 {
                             Some(drive_models.first().unwrap().block_path.clone())
-                        }
-                        else {
+                        } else {
                             None
                         }
                     }
@@ -510,43 +481,69 @@ impl Application for AppModel {
                     match selected {
                         Some(ref s) => {
                             if drive.block_path == s.clone() {
-                               self.nav.insert()
+                                self.nav
+                                    .insert()
                                     .text(drive.pretty_name())
-                                    .data::<VolumesControl>(VolumesControl::new(
-                                        drive.clone(),
-                                    ))
+                                    .data::<VolumesControl>(VolumesControl::new(drive.clone()))
                                     .data::<DriveModel>(drive)
                                     .icon(icon::from_name(icon))
                                     .activate();
                             } else {
-                                self.nav.insert()
+                                self.nav
+                                    .insert()
                                     .text(drive.pretty_name())
-                                    .data::<VolumesControl>(VolumesControl::new(
-                                        drive.clone(),
-                                    ))
+                                    .data::<VolumesControl>(VolumesControl::new(drive.clone()))
                                     .data::<DriveModel>(drive)
                                     .icon(icon::from_name(icon));
                             }
                         }
                         None => {
-                            self.nav.insert()
-                            .text(drive.pretty_name())
-                            .data::<VolumesControl>(VolumesControl::new(
-                                drive.clone(),
-                            ))
-                            .data::<DriveModel>(drive)
-                            .icon(icon::from_name(icon));
+                            self.nav
+                                .insert()
+                                .text(drive.pretty_name())
+                                .data::<VolumesControl>(VolumesControl::new(drive.clone()))
+                                .data::<DriveModel>(drive)
+                                .icon(icon::from_name(icon));
                         }
                     }
                 }
-
             }
-            Message::Dialog(show_dialog) => {
-                self.dialog = Some(show_dialog)
-            },
+            Message::Dialog(show_dialog) => self.dialog = Some(show_dialog),
             Message::CloseDialog => {
                 self.dialog = None;
-            },
+            }
+            Message::Eject => {
+                if let Some(drive) = self.nav.active_data::<DriveModel>().cloned() {
+                    return Task::perform(
+                        async move {
+                            let _ = drive.eject().await; //TODO handle error
+                            match DriveModel::get_drives().await {
+                                Ok(drives) => Some(drives),
+                                Err(e) => {
+                                    println!("Error: {}", e);
+                                    return None;
+                                }
+                            }
+                        },
+                        move |drives| match drives {
+                            None => return Message::None.into(),
+                            Some(drives) => return Message::UpdateNav(drives, None).into(),
+                        },
+                    );
+                } else {
+                }
+            }
+            Message::PowerOff => todo!(),
+            Message::Format => todo!(),
+            Message::Benchmark => todo!(),
+            Message::SmartData => todo!(),
+            Message::DriveSettings => todo!(),
+            Message::StandbyNow => todo!(),
+            Message::Wakeup => todo!(),
+            Message::NewDiskImage => todo!(),
+            Message::AttachDisk => todo!(),
+            Message::CreateDiskFrom => todo!(),
+            Message::RestoreImageTo => todo!(),
         }
         Task::none()
     }
@@ -554,12 +551,10 @@ impl Application for AppModel {
     /// Called when a nav item is selected.
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
         // Activate the page in the model.
-        if self.dialog.is_none()
-        {
+        if self.dialog.is_none() {
             self.nav.activate(id);
             self.update_title()
-        }
-        else {
+        } else {
             Task::none()
         }
     }
@@ -567,39 +562,6 @@ impl Application for AppModel {
 
 impl AppModel {
     /// The about page for this app.
-    pub fn about(&self) -> Element<Message> {
-        let cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
-
-        let icon = widget::svg(widget::svg::Handle::from_memory(APP_ICON));
-
-        let title = widget::text::title3(fl!("app-title"));
-
-        let hash = env!("VERGEN_GIT_SHA");
-        let short_hash: String = hash.chars().take(7).collect();
-        let date = env!("VERGEN_GIT_COMMIT_DATE");
-
-        let link = widget::button::link(REPOSITORY)
-            .on_press(Message::OpenRepositoryUrl)
-            .padding(0);
-
-        widget::column()
-            .push(icon)
-            .push(title)
-            .push(link)
-            .push(
-                widget::button::link(fl!(
-                    "git-description",
-                    hash = short_hash.as_str(),
-                    date = date
-                ))
-                .on_press(Message::LaunchUrl(format!("{REPOSITORY}/commits/{hash}")))
-                .padding(0),
-            )
-            .align_x(Alignment::Center)
-            .spacing(space_xxs)
-            .into()
-    }
-
     /// Updates the header and window titles.
     pub fn update_title(&mut self) -> Task<Message> {
         let mut window_title = fl!("app-title");
@@ -622,19 +584,4 @@ impl AppModel {
 pub enum ContextPage {
     #[default]
     About,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MenuAction {
-    About,
-}
-
-impl menu::action::MenuAction for MenuAction {
-    type Message = Message;
-
-    fn message(&self) -> Self::Message {
-        match self {
-            MenuAction::About => Message::ToggleContextPage(ContextPage::About),
-        }
-    }
 }

@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use cosmic::{
     cosmic_theme::palette::WithAlpha,
     iced::{Alignment, Background, Length, Shadow},
@@ -11,21 +9,19 @@ use cosmic::{
     Element, Task,
 };
 use cosmos_common::bytes_to_pretty;
-use cosmos_dbus::disks::{DriveModel, PartitionModel};
+use cosmos_dbus::disks::{CreatePartitionInfo, DriveModel, PartitionModel};
+use crate::app::{Message, ShowDialog};
 
-use crate::app::{AppModel, Message, ShowDialog};
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VolumesControlMessage {
     SegmentSelected(usize),
-    Add,
     Mount,
     Unmount,
     Delete,
     CreateMessage(CreateMessage)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreateMessage
 {
     SizeUpdate(u64),
@@ -36,7 +32,8 @@ pub enum CreateMessage
     EraseUpdate(bool),
     PartitionTypeUpdate(usize),
     Continue,
-    Cancel
+    Cancel,
+    Partition(CreatePartitionInfo)
 }
 
 impl Into<VolumesControlMessage> for CreateMessage
@@ -79,23 +76,6 @@ pub struct Segment {
     pub partition: Option<PartitionModel>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct CreatePartitionInfo
-{
-    pub name: String,
-    pub size: u64,
-    pub max_size: u64,
-    pub offset: u64,
-    pub erase: bool,
-    pub selected_type: String, 
-    pub partition_uuid: String,
-    pub selected_partitition_type: usize,
-    pub password_protected: bool,
-    pub password: String,
-    pub confirmed_password: String,
-    pub can_continue: bool,
-
-}
 
 #[derive(Copy, Clone)]
 pub enum ToggleState {
@@ -137,6 +117,7 @@ impl Segment {
         CreatePartitionInfo{
             max_size: self.size,
             offset: self.offset,
+            size: self.size,
             ..Default::default()
         }
     }
@@ -272,7 +253,6 @@ impl VolumesControl {
                 self.segments.get_mut(index).unwrap().state = true;
             }
         }
-        VolumesControlMessage::Add => {}
         VolumesControlMessage::Mount => {
             let segment = self.segments.get(self.selected_segment.clone()).cloned();
             match segment.clone() {
@@ -387,6 +367,32 @@ impl VolumesControl {
                         CreateMessage::PartitionTypeUpdate(p_type) => create.selected_partitition_type = p_type,
                         CreateMessage::Continue => todo!(),
                         CreateMessage::Cancel => todo!(),
+                        CreateMessage::Partition(create_partition_info) =>
+                        {
+                            let model = self.model.clone();
+                            let task = Task::perform(
+                                        async move {
+                                            
+
+                                            match model.create_partition(create_partition_info).await {
+                                                Ok(_) => match DriveModel::get_drives().await {
+                                                    Ok(drives) => Ok(drives),
+                                                    Err(e) => Err(e),
+                                                },
+                                                Err(e) => Err(e),
+                                            }
+                                        },
+                                        |result| match result {
+                                            Ok(drives) => Message::UpdateNav(drives, None).into(),
+                                            Err(e) => {
+                                                println!("{e}");
+                                                Message::None.into()
+                                            }
+                                        },
+                            );
+                
+                            return Task::done(Message::CloseDialog.into()).chain(task);
+                        }
                     }
                 }
             }

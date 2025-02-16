@@ -3,8 +3,7 @@
 mod app;
 mod config;
 mod i18n;
-mod utils;
-mod dialogs;
+mod views;
 
 //#[tokio::main]
 fn main() -> cosmic::iced::Result {

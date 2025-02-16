@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use serde::Deserialize;
 use tracing::{info, warn, error};
 use udisks2::{block::BlockProxy, drive::DriveProxy, partition::PartitionProxy, partitiontable::PartitionTableProxy, Client};
 use zbus::{
-    conn, zvariant::{self, OwnedObjectPath, Value}, Connection
+    zvariant::OwnedObjectPath, Connection
 };
-use zbus_macros::proxy;
 
 use super::{get_usage_data, manager::UDisks2ManagerProxy, PartitionModel};
 
@@ -31,9 +29,27 @@ pub struct DriveModel {
     pub block_path: String,
     pub partitions: Vec<PartitionModel>,
     pub path: String,
-    pub partition_table_type: Option<String>
+    pub partition_table_type: Option<String>,
+    connection: Connection,
 }
 
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CreatePartitionInfo
+{
+    pub name: String,
+    pub size: u64,
+    pub max_size: u64,
+    pub offset: u64,
+    pub erase: bool,
+    pub selected_type: String, 
+    pub selected_partitition_type: usize,
+    pub password_protected: bool,
+    pub password: String,
+    pub confirmed_password: String,
+    pub can_continue: bool,
+
+}
 
 #[derive(Debug, Clone)]
 struct DriveBlockPair {
@@ -48,6 +64,7 @@ impl DriveModel {
 
     pub(crate) async fn from_proxy(
         path: &str,
+        block_path: &str,
         drive_proxy: &DriveProxy<'_>,
     ) -> Result<Self> {
         Ok(DriveModel {
@@ -58,7 +75,7 @@ impl DriveModel {
             model: drive_proxy.model().await?,
             serial: drive_proxy.serial().await?,
             vendor: drive_proxy.vendor().await?,
-            block_path: path.to_string(),
+            block_path: block_path.to_string(),
             partitions: vec![],
             can_power_off: drive_proxy.can_power_off().await?,
             ejectable: drive_proxy.ejectable().await?,
@@ -70,7 +87,33 @@ impl DriveModel {
             removable: drive_proxy.removable().await?,
             revision: drive_proxy.revision().await?,
             partition_table_type: None,
+            connection: Connection::system().await?
         })
+    }
+
+    pub async fn eject(&self) -> Result<()>
+    {
+        let proxy = DriveProxy::builder(&self.connection).path(self.path.clone())?.build().await?;
+        proxy.eject(HashMap::new()).await?;
+        Ok(())
+    }
+
+    pub async fn power_off(&self) -> Result<()>
+    {
+        let proxy = DriveProxy::builder(&self.connection).path(self.path.clone())?.build().await?;
+        proxy.power_off(HashMap::new()).await?;
+        Ok(())
+    }
+
+
+    pub async fn create_partition(&self, info: CreatePartitionInfo) -> Result<()>
+    {
+        let partition_table_proxy = PartitionTableProxy::builder(&self.connection).path(self.block_path.clone())?.build().await?;
+
+        //&PARTITION_TYPES[info.selected_partitition_type].ty
+        partition_table_proxy.create_partition_and_format(info.offset, info.size, "0FC63DAF-8483-4772-8E79-3D69D8477DE4", &info.name, HashMap::new(), "0FC63DAF-8483-4772-8E79-3D69D8477DE4", HashMap::new()).await?;
+
+        Ok(())
     }
 
     async fn get_drive_paths(connection: &Connection) -> Result<Vec<DriveBlockPair>> {
@@ -122,7 +165,7 @@ impl DriveModel {
 
         for pair in drive_paths {
             let drive_proxy = DriveProxy::builder(&connection).path(&pair.drive_path)?.build().await?;
-            let mut drive = match DriveModel::from_proxy(&pair.drive_path, &drive_proxy).await {
+            let mut drive = match DriveModel::from_proxy(&pair.drive_path, &pair.block_path, &drive_proxy).await {
                 Ok(d) => d,
                 Err(e) => {
                     warn!("Could not get drive: {}", e);
@@ -173,7 +216,7 @@ impl DriveModel {
                 let block_proxy = BlockProxy::builder(&connection).path(&partition_path)?.build().await?;
 
 
-                drive.partitions.push(PartitionModel::from_proxy(&client, partition_path.clone(), usage, &partition_proxy, &block_proxy).await?);
+                drive.partitions.push(PartitionModel::from_proxy(&client, pair.drive_path.to_string(), partition_path.clone(), usage, &partition_proxy, &block_proxy).await?);
             }
 
 
