@@ -14,6 +14,8 @@ If you work over at System76 and would like to chat, hit me up!
 ## cosmos-dbus
 This project will be an abstraction layer for comsos-disks, and any other dbus interfaces. The idea here is to provide models that can easily be swapped out at a later date, as better suited rust crates become available for achieving the same functionality.
 
+## cosmos-common
+A place for UI stuff shared across projects.
 
 ## cosmos-apx
 This project is a WIP of a UI for APX. It is currently in a very rough state, and is being somewhat neglected while I work on bringing cosmic-disks up to production.
