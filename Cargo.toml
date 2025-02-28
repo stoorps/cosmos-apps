@@ -6,7 +6,7 @@ members = [
     "cosmos-dbus",
     "cosmos-disks",
 ]
-default-members = ["cosmos-apxui", "cosmos-disks"]
+default-members = ["cosmos-disks"]
 resolver = "2"
 
 [workspace.dependencies]

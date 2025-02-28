@@ -80,6 +80,176 @@ pub static PARTITION_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
         .collect()
 });
 
+pub static COMMON_PARTITION_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
+    COMMON_PARTITION_TYPES
+        .iter()
+        .map(|p| format!("{} - {}", p.name, p.ty))
+        .collect()
+});
+
+
+
+pub static COMMON_PARTITION_TYPES: [PartitionTypeInfo; 20] = [
+    // System/Boot partitions
+    PartitionTypeInfo::new(
+        "gpt",
+        "generic",
+        "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+        "EFI System",
+        PartitionTypeInfoFlags::System,
+    ),
+    PartitionTypeInfo::new(
+        "gpt",
+        "generic",
+        "21686148-6449-6e6f-744e-656564454649",
+        "BIOS Boot",
+        PartitionTypeInfoFlags::System,
+    ),
+    
+    // Common Linux partitions
+    PartitionTypeInfo::new(
+        "gpt",
+        "linux",
+        "4f68bce3-e8cd-4db1-96e7-fbcaf984b709",
+        "Linux Root Partition (x86_64)",
+        PartitionTypeInfoFlags::None,
+    ),
+    PartitionTypeInfo::new(
+        "gpt",
+        "linux",
+        "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f",
+        "Linux Swap",
+        PartitionTypeInfoFlags::Swap,
+    ),
+    PartitionTypeInfo::new(
+        "gpt",
+        "linux",
+        "0fc63daf-8483-4772-8e79-3d69d8477de4",
+        "Linux Filesystem",
+        PartitionTypeInfoFlags::None,
+    ),
+    PartitionTypeInfo::new(
+        "gpt",
+        "linux",
+        "e6d6d379-f507-44c2-a23c-238f2a3df928",
+        "Linux LVM",
+        PartitionTypeInfoFlags::Raid,
+    ),
+    
+    // Microsoft partitions
+    PartitionTypeInfo::new(
+        "gpt",
+        "microsoft",
+        "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7",
+        "Basic Data",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // DOS/MBR partition types
+    PartitionTypeInfo::new(
+        "dos",
+        "generic",
+        "0x05",
+        "Extended",
+        PartitionTypeInfoFlags::CreateOnly,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "generic",
+        "0xee",
+        "EFI GPT",
+        PartitionTypeInfoFlags::System,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "linux",
+        "0x82",
+        "Linux swap",
+        PartitionTypeInfoFlags::Swap,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "linux",
+        "0x83",
+        "Linux",
+        PartitionTypeInfoFlags::None,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "linux",
+        "0x8e",
+        "Linux LVM",
+        PartitionTypeInfoFlags::Raid,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "microsoft",
+        "0x07",
+        "NTFS/exFAT/HPFS",
+        PartitionTypeInfoFlags::None,
+    ),
+    PartitionTypeInfo::new(
+        "dos",
+        "microsoft",
+        "0x0c",
+        "FAT32 (LBA)",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // Apple partitions
+    PartitionTypeInfo::new(
+        "gpt",
+        "apple",
+        "48465300-0000-11aa-aa11-00306543ecac",
+        "Apple HFS+",
+        PartitionTypeInfoFlags::None,
+    ),
+    PartitionTypeInfo::new(
+        "gpt",
+        "apple",
+        "7c3457ef-0000-11aa-aa11-00306543ecac",
+        "Apple APFS",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // Recovery/Diagnostic partitions
+    PartitionTypeInfo::new(
+        "gpt",
+        "generic",
+        "bc13c2ff-59e6-4262-a352-b275fd6f7172",
+        "Extended Boot",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // ZFS
+    PartitionTypeInfo::new(
+        "gpt",
+        "generic",
+        "6a898cc3-1dd2-11b2-99a6-080020736631",
+        "ZFS",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // FreeBSD
+    PartitionTypeInfo::new(
+        "gpt",
+        "other",
+        "516e7cb4-6ecf-11d6-8ff8-00022d09712b",
+        "FreeBSD Data",
+        PartitionTypeInfoFlags::None,
+    ),
+    
+    // ChromeOS
+    PartitionTypeInfo::new(
+        "gpt",
+        "other",
+        "3cb8e202-3b7e-47dd-8a3c-7ff2a13cfcec",
+        "ChromeOS Root Filesystem",
+        PartitionTypeInfoFlags::None,
+    ),
+];
+
+
 /// Known [PartitionType]s.
 /// see http://en.wikipedia.org/wiki/GUID_Partition_Table
 pub static PARTITION_TYPES: [PartitionTypeInfo; 228] = [

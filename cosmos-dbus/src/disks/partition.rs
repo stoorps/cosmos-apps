@@ -164,6 +164,8 @@ impl PartitionModel {
             return Err(DiskError::NotConnected(self.name.clone()).into())
         }
 
+
+        
         Ok(())
     }
 
@@ -188,6 +190,9 @@ impl PartitionModel {
         {
             return Err(DiskError::NotConnected(self.name.clone()).into())
         }
+
+
+        
         Ok(())
     }
 

@@ -157,7 +157,7 @@ impl Application for AppModel {
                     Some(Message::CloseDialog),
                 )),
 
-                ShowDialog::AddPartition(create) => Some(dialogs::add_partition(create.clone())),
+                ShowDialog::AddPartition(create) => Some(dialogs::create_partition(create.clone())),
             },
             None => None,
         }
@@ -431,7 +431,6 @@ impl Application for AppModel {
                 );
             }
             Message::DriveAdded(_drive_model) => {
-                //TODO: use DeviceManager.apply_change()
 
                 return Task::perform(
                     async {

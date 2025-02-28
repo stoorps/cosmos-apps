@@ -8,3 +8,4 @@ async-trait = "0.1.86"
 libcosmic = { workspace = true }
 num-format = "0.4.4"
 tokio.workspace = true
+anyhow.workspace = true

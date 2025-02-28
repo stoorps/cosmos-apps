@@ -7,7 +7,7 @@ use zbus::{
     zvariant::OwnedObjectPath, Connection
 };
 
-use super::{get_usage_data, manager::UDisks2ManagerProxy, PartitionModel};
+use super::{get_usage_data, manager::UDisks2ManagerProxy, PartitionModel, COMMON_PARTITION_TYPES};
 
 #[derive(Debug, Clone)]
 pub struct DriveModel {
@@ -110,8 +110,9 @@ impl DriveModel {
     {
         let partition_table_proxy = PartitionTableProxy::builder(&self.connection).path(self.block_path.clone())?.build().await?;
 
-        //&PARTITION_TYPES[info.selected_partitition_type].ty
-        partition_table_proxy.create_partition_and_format(info.offset, info.size, "0FC63DAF-8483-4772-8E79-3D69D8477DE4", &info.name, HashMap::new(), "0FC63DAF-8483-4772-8E79-3D69D8477DE4", HashMap::new()).await?;
+        let partition_type = &COMMON_PARTITION_TYPES[info.selected_partitition_type].ty;
+
+        partition_table_proxy.create_partition_and_format(info.offset, info.size, partition_type, &info.name, HashMap::new(), partition_type, HashMap::new()).await?;
 
         Ok(())
     }

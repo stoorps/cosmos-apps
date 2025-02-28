@@ -241,7 +241,7 @@ impl VolumesControl {
     pub fn update(
         &mut self,
         message: VolumesControlMessage,
-        dialog: &mut Option<ShowDialog>
+        dialog: &mut Option<ShowDialog>,
     ) -> Task<cosmic::app::Message<Message>> {
 
     match message {
